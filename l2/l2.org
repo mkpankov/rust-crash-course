@@ -63,7 +63,7 @@ fn main() {
 }
 
 fn print_sum(x: i32, y: i32) {
-    println!("sum is: {}", x + y);
+    println!("сумма равна: {}", x + y);
 }
 #+END_SRC
 
@@ -410,6 +410,22 @@ println!("x is {}", x);
   20?
 #+END_SRC
 
+** Шаблон
+
+*** Project Euler #1
+
+#+BEGIN_SRC rust
+  fn problem(multiple1: usize, multiple2: usize,
+             limit: usize)
+  {
+      ...
+  }
+
+  fn main() {
+      problem(3, 5, 1000);
+  }
+#+END_SRC
+
 ** Повышенный уровень сложности
 
 *** Project Euler #1
@@ -421,18 +437,6 @@ println!("x is {}", x);
 
   fn main() {
       problem([3, 5], 1000);
-  }
-#+END_SRC
-
-** Шаблон
-
-#+BEGIN_SRC rust
-  fn problem(multiple1: usize, multiple2: usize, limit: usize) {
-      ...
-  }
-
-  fn main() {
-      problem(3, 5, 1000);
   }
 #+END_SRC
 
