@@ -1,0 +1,439 @@
+#+TITLE: Rust №2. Функции. Поток управления
+#+AUTHOR: Панков Михаил
+#+DATE: Февраль 2017
+#+EMAIL: work@michaelpankov.com
+#+LANGUAGE: ru
+#+CATEGORY: task
+#+OPTIONS:   H:2 num:t toc:nil \n:nil @:t ::t |:t ^:t -:t f:t *:t <:t
+#+OPTIONS:   TeX:t LaTeX:t skip:nil d:nil todo:t pri:nil tags:not-in-toc
+#+INFOJS_OPT: view:nil toc:nil ltoc:t mouse:underline buttons:0 path:http://orgmode.org/org-info.js
+#+EXPORT_SELECT_TAGS: export
+#+EXPORT_EXCLUDE_TAGS: noexport
+#+LINK_UP:
+#+LINK_HOME:
+#+startup: beamer
+#+LaTeX_CLASS: beamer
+# +LaTeX_CLASS_OPTIONS: [notes]
+#+COLUMNS: %40ITEM %10BEAMER_env(Env) %9BEAMER_envargs(Env Args) %4BEAMER_col(Col) %10BEAMER_extra(Extra)
+#+latex_header: \usepackage[english,russian]{babel}
+#+latex_header: \mode<beamer>{\usetheme{metropolis}}
+
+* Забытое с прошлого раза
+
+** Сопоставление с образцом
+
+#+BEGIN_SRC rust
+  let (a, b) = (1, 2);
+#+END_SRC
+
+* Функции
+
+** Функции
+
+#+BEGIN_SRC rust
+fn foo() {
+}
+#+END_SRC
+
+** Функции
+
+#+BEGIN_SRC rust -n
+fn main() {
+    print_number(5);
+}
+
+fn print_number(x: i32) {
+    println!("x равен: {}", x);
+}
+#+END_SRC
+
+** Аргументы должны быть с объявленным типом
+
+#+BEGIN_SRC rust
+fn print_sum(x, y) {
+    println!("сумма равна: {}", x + y);
+}
+#+END_SRC
+
+** Аргументы должны быть с объявленным типом
+
+#+BEGIN_SRC rust -n
+fn main() {
+    print_sum(5, 6);
+}
+
+fn print_sum(x: i32, y: i32) {
+    println!("sum is: {}", x + y);
+}
+#+END_SRC
+
+** Расходящиеся функции (diverging)
+
+#+BEGIN_SRC rust
+fn diverges() -> ! {
+  panic!("Эта функция не возвращает управление!");
+}
+#+END_SRC
+
+** Паника и backtrace
+
+#+BEGIN_SRC text
+$ RUST_BACKTRACE=1 ./diverges
+thread 'main' panicked at
+'This function never returns!', hello.rs:2
+stack backtrace:
+   1:     0x7f402773a829 - sys::backtrace::write::h0942de78b6c02817K8r
+   2:     0x7f402773d7fc - panicking::on_panic::h3f23f9d0b5f4c91bu9w
+   3:     0x7f402773960e - rt::unwind::begin_unwind_inner::h2844b8c5e81e79558Bw
+   4:     0x7f4027738893 - rt::unwind::begin_unwind::h4375279447423903650
+   5:     0x7f4027738809 - diverges::h2266b4c4b850236beaa
+   6:     0x7f40277389e5 - main::h19bb1149c2f00ecfBaa
+   7:     0x7f402773f514 - rt::unwind::try::try_fn::h13186883479104382231
+   8:     0x7f402773d1d8 - __rust_try
+   9:     0x7f402773f201 - rt::lang_start::ha172a3ce74bb453aK5w
+  10:     0x7f4027738a19 - main
+#+END_SRC
+
+** Указатели на функции
+
+#+BEGIN_SRC rust -n
+fn plus_one(i: i32) -> i32 {
+    i + 1
+}
+
+// Без вывода типов
+let f: fn(i32) -> i32 = plus_one;
+
+// С выводом типов
+let f = plus_one;
+
+let six = f(5);
+#+END_SRC
+
+* Комментарии
+
+** Простые комментарии
+
+#+BEGIN_SRC rust
+// Однострочный комментарий
+
+let x = 5; // Тоже однострочный комментарий
+
+// Длинный
+// объясняющий
+// комментарий
+#+END_SRC
+
+** Документирующие комментарии
+
+#+BEGIN_SRC rust
+/// Добавляет единицу к данному числу
+///
+/// # Examples
+/// ```
+/// let five = 5;
+/// assert_eq!(6, add_one(5));
+/// # fn add_one(x: i32) -> i32 {
+/// #     x + 1
+/// # }
+/// ```
+pub fn add_one(x: i32) -> i32 {
+    x + 1
+}
+#+END_SRC
+
+** Генерируем документацию
+
+~cargo doc --open~
+
+** Как выглядит документация
+
+***                                                          :B_column:BMCOL:
+    :PROPERTIES:
+    :BEAMER_col: 1.0
+    :BEAMER_env: column
+    :END:
+    [[file:pics/docs.png][file:~/org/courses/kl-001/l2/pics/docs.png]]
+
+
+** Документирующие комментарии уровня модуля
+
+#+BEGIN_SRC rust
+//! # The Rust Standard Library
+//!
+//! The Rust Standard Library provides the
+//! essential runtime functionality for
+//! building portable Rust software.
+#+END_SRC
+
+* Условия
+
+** Простой if
+
+#+BEGIN_SRC rust
+let x = 5;
+
+if x == 5 {
+    println!("x равен пяти!");
+}
+#+END_SRC
+
+** С else
+
+#+BEGIN_SRC rust -n
+let x = 5;
+
+if x == 5 {
+    println!("x равен пяти!");
+} else {
+    println!("x не равен пяти :(");
+}
+#+END_SRC
+
+** С else if
+
+#+BEGIN_SRC rust
+let x = 5;
+
+if x == 5 {
+    println!("x равен пяти!");
+} else if x == 6 {
+    println!("x равен шести!");
+} else {
+    println!("x не равен пяти или шести");
+}
+#+END_SRC
+
+** Как тернарный оператор
+
+#+BEGIN_SRC rust
+let x = 5;
+
+let y = if x == 5 {
+    10
+} else {
+    15
+}; // y: i32
+
+// let y = if x == 5 { 10 } else { 15 }; // y: i32
+#+END_SRC
+
+* Циклы
+
+** loop
+
+#+BEGIN_SRC rust
+loop {
+    println!("Зацикливаемся!");
+}
+#+END_SRC
+
+** while
+
+#+BEGIN_SRC rust -n
+  let mut x = 0; // mut x: i32
+
+  while x < 10 {
+      println!("{}", x);
+
+      x += 1;
+  }
+#+END_SRC
+
+** for
+
+#+BEGIN_SRC rust
+for x in 0..10 {
+    println!("{}", x); // x: i32
+}
+#+END_SRC
+
+** enumerate на отрезках значений
+
+#+BEGIN_SRC rust
+  for (index, value) in (5..10).enumerate() {
+      println!("индекс = {} и значение = {}",
+               index, value);
+  }
+#+END_SRC
+
+** enumerate на итераторах
+
+#+BEGIN_SRC rust
+let lines = "привет\nмир".lines();
+
+for (linenumber, line) in lines.enumerate() {
+    println!("{}: {}", linenumber, line);
+}
+#+END_SRC
+
+** Ранний выход
+
+#+BEGIN_SRC rust -n
+  let mut x = 0; // mut x: i32
+
+  while x < 10 {
+      println!("{}", x);
+
+      if (x % 5 == 0) {
+          break;
+      }
+
+      x += 1;
+  }
+#+END_SRC
+
+** Пропуск итерации
+
+#+BEGIN_SRC rust
+  let mut x = 0; // mut x: i32
+
+  while x < 10 {
+      if x % 2 == 0 {
+          continue;
+      }
+
+      println!("{}", x);
+
+      x += 1;
+  }
+#+END_SRC
+
+** Метки циклов
+
+#+BEGIN_SRC rust
+  'outer: for x in 0..10 {
+      'inner: for y in 0..10 {
+          // Начинает следующую итерацию по `x`.
+          if x % 2 == 0 { continue 'outer; }
+          // Начинает следующую итерацию по `y`.
+          if y % 2 == 0 { continue 'inner; }
+          println!("x: {}, y: {}", x, y);
+      }
+  }
+#+END_SRC
+
+https://is.gd/GMmV6u
+
+* Дополнения
+
+** Переполнение
+
+https://is.gd/HGAfjw
+
+** Инициализация связывания
+
+#+BEGIN_SRC rust
+fn main() {
+    let x: i32;
+
+    println!("Значение x: {}", x);
+}
+#+END_SRC
+
+** Область действия: сокрытие имён
+
+#+BEGIN_SRC rust -n
+let x: i32 = 8;
+{
+    println!("{}", x); // Печатает "8".
+    let x = 12;
+    println!("{}", x); // Печатает "12".
+}
+println!("{}", x); // Печатает "8".
+let x =  42;
+println!("{}", x); // Печатает "42".
+#+END_SRC
+
+** Область действия: изменение типа
+
+#+BEGIN_SRC rust -n
+let mut x: i32 = 1;
+x = 7;
+let x = x; // Теперь `x` неизменяем и связан
+           // со значением `7`.
+
+let y = 4;
+let y = "Я также могу быть связан с текстом!";
+// `y` теперь другого типа.
+#+END_SRC
+
+** Индексация кортежей
+
+#+BEGIN_SRC rust
+let tuple = (1, 2, 3);
+
+let x = tuple.0;
+let y = tuple.1;
+let z = tuple.2;
+
+println!("x is {}", x);
+#+END_SRC
+
+* Домашнее задание
+
+** Project Euler #1
+
+#+BEGIN_SRC text
+  If we list all the natural numbers below 10 that
+  are multiples of 3 or 5, we get 3, 5, 6 and 9.
+  The sum of these multiples is 23.
+
+  Find the sum of all the multiples of 3 or 5
+  below 1000.
+#+END_SRC
+
+** Project Euler #2
+
+#+BEGIN_SRC text
+  Each new term in the Fibonacci sequence is
+  generated by adding the previous two terms. By
+  starting with 1 and 2, the first 10 terms will
+  be:
+
+  1, 2, 3, 5, 8, 13, 21, 34, 55, 89, ...
+
+  By considering the terms in the Fibonacci
+  sequence whose values do not exceed four
+  million, find the sum of the even-valued terms.
+#+END_SRC
+
+** Project Euler #5
+
+#+BEGIN_SRC text
+  2520 is the smallest number that can be divided
+  by each of the numbers from 1 to 10 without any
+  remainder.
+
+  What is the smallest positive number that is
+  evenly divisible by all of the numbers from 1 to
+  20?
+#+END_SRC
+
+** Повышенный уровень сложности
+
+*** Project Euler #1
+
+#+BEGIN_SRC rust
+  fn problem(multiples: ???, limit: usize) {
+      ...
+  }
+
+  fn main() {
+      problem([3, 5], 1000);
+  }
+#+END_SRC
+
+** Шаблон
+
+#+BEGIN_SRC rust
+  fn problem(multiple1: usize, multiple2: usize, limit: usize) {
+      ...
+  }
+
+  fn main() {
+      problem(3, 5, 1000);
+  }
+#+END_SRC
+
+* Спасибо
