@@ -96,8 +96,117 @@ println!("{}", s1); // use of moved value: `s1`
     :END:
     [[file:pics/trpl04-04.png][file:~/org/courses/kl-001/l3/pics/trpl04-04.png]]
 
+** Копирование сложных типов данных
+
+#+BEGIN_SRC rust
+  let s1 = String::from("hello");
+  // String не реализует Copy
+  let s2 = s1.clone();
+
+  println!("s1 = {}, s2 = {}", s1, s2);
+#+END_SRC
+
+** Копирование примитивов
+
+#+BEGIN_SRC rust
+  let x = 5;
+  // isize реализует Copy
+  let y = x;
+
+  println!("x = {}, y = {}", x, y);
+#+END_SRC
+
+* Области действия
+
+** Владение и функции (1)
+
+#+BEGIN_SRC rust
+  fn main() {
+      let s = String::from("hello");
+
+      takes_ownership(s); // владение s передали
+
+      let x = 5;
+
+      makes_copy(x); // x реализует Copy
+
+  } // s уже перемещён, ничего особенного не случается
+
+#+END_SRC
+
+** Владение и функции (2)
+
+#+BEGIN_SRC rust
+fn takes_ownership(some_string: String) {
+    println!("{}", some_string);
+} // память some_string освобождается
+
+fn makes_copy(some_integer: i32) {
+    println!("{}", some_integer);
+} // целое просто выходит из области действия
+
+#+END_SRC
+
+** Возвращаемые значения (1)
+
+#+BEGIN_SRC rust
+fn main() {
+    let s1 = gives_ownership();
+
+    let s2 = String::from("hello");
+
+    let s3 = takes_and_gives_back(s2);
+} // s1.drop(), s3.drop()
+
+#+END_SRC
+
+** Возвращаемые значения (2)
+
+#+BEGIN_SRC rust
+  fn gives_ownership() -> String {
+      let some_string = String::from("hello");
+
+      some_string
+  }
+
+  fn takes_and_gives_back(a_string: String)
+                          -> String {
+      a_string
+  }
+#+END_SRC
+
+** Возврат множества значений
+
+#+BEGIN_SRC rust
+  fn main() {
+      let s1 = String::from("hello");
+
+      let (s2, len) = calculate_length(s1);
+
+      println!("The length of '{}' is {}.", s2, len);
+  }
+
+  fn calculate_length(s: String)
+                      -> (String, usize) {
+      let length = s.len();
+
+      (s, length)
+  }
+#+END_SRC
 
 * Домашнее задание
+
+** Домашнее задание
+
+- https://is.gd/QfS71O
+
+- Мысленно пройти по шагам всю программу, и объяснить, где значение
+  - копируется
+  - перемещается
+  - уничтожается
+
+- Вместо ~_~ вставить имена, чтобы мочь получить результаты из функций
+
 * Спасибо
 
 # * Забытое с прошлого раза
