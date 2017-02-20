@@ -1,0 +1,216 @@
+#+TITLE: Rust №4. Ссылки и заимствование
+#+AUTHOR: Панков Михаил
+#+DATE: Февраль 2017
+#+EMAIL: work@michaelpankov.com
+#+LANGUAGE: ru
+#+CATEGORY: task
+#+OPTIONS:   H:2 num:t toc:nil \n:nil @:t ::t |:t ^:t -:t f:t *:t <:t
+#+OPTIONS:   TeX:t LaTeX:t skip:nil d:nil todo:t pri:nil tags:not-in-toc
+#+INFOJS_OPT: view:nil toc:nil ltoc:t mouse:underline buttons:0 path:http://orgmode.org/org-info.js
+#+EXPORT_SELECT_TAGS: export
+#+EXPORT_EXCLUDE_TAGS: noexport
+#+LINK_UP:
+#+LINK_HOME:
+#+startup: beamer
+#+LaTeX_CLASS: beamer
+# +LaTeX_CLASS_OPTIONS: [notes]
+#+COLUMNS: %40ITEM %10BEAMER_env(Env) %9BEAMER_envargs(Env Args) %4BEAMER_col(Col) %10BEAMER_extra(Extra)
+#+latex_header: \usepackage[english,russian]{babel}
+#+latex_header: \mode<beamer>{\usetheme{metropolis}}
+
+* Ссылки и заимствование
+
+** Простейший пример
+
+#+BEGIN_SRC rust
+fn main() {
+    let s1 = String::from("hello");
+
+    let len = calculate_length(&s1);
+
+    println!("The length of '{}' is {}.", s1, len);
+}
+
+fn calculate_length(s: &String) -> usize {
+    s.len()
+}
+#+END_SRC
+
+** Как выглядит память
+
+***                                                          :B_column:BMCOL:
+    :PROPERTIES:
+    :BEAMER_col: 1.0
+    :BEAMER_env: column
+    :END:
+    [[file:pics/trpl4-8.png][file:~/org/courses/kl-001/l4/pics/trpl4-8.png]]
+
+** Попытка изменить заимствованное значение
+
+#+BEGIN_SRC rust
+fn main() {
+    let s = String::from("hello");
+
+    change(&s);
+}
+
+fn change(some_string: &String) {
+    some_string.push_str(", world");
+}
+#+END_SRC
+
+** Ошибка
+
+#+BEGIN_SRC text
+error: cannot borrow immutable borrowed content `*some_string` as mutable
+ --> error.rs:8:5
+  |
+8 |     some_string.push_str(", world");
+  |     ^^^^^^^^^^^
+#+END_SRC
+
+** Ссылки с правом записи
+
+#+BEGIN_SRC rust
+fn main() {
+    let mut s = String::from("hello");
+
+    change(&mut s);
+}
+
+fn change(some_string: &mut String) {
+    some_string.push_str(", world");
+}
+#+END_SRC
+
+** Так нельзя
+
+#+BEGIN_SRC rust
+let mut s = String::from("hello");
+
+let r1 = &mut s;
+let r2 = &mut s;
+#+END_SRC
+
+** Ошибка
+
+#+BEGIN_SRC text
+error[E0499]: cannot borrow `s` as mutable more
+than once at a time
+ --> borrow_twice.rs:5:19
+  |
+4 |     let r1 = &mut s;
+  |                   - first mutable borrow occurs here
+5 |     let r2 = &mut s;
+  |                   ^ second mutable borrow occurs here
+6 | }
+  | - first borrow ends here
+#+END_SRC
+
+* Гонки данных
+
+** Гонки данных
+
+- Доступ по двум или более указателям происходит одновременно
+- По крайней мере один доступ производит запись
+- Доступ не синхронизирован
+
+** Одновременно нельзя, вообще можно
+
+#+BEGIN_SRC rust
+let mut s = String::from("hello");
+
+{
+    let r1 = &mut s;
+
+} // r1 умирает
+
+let r2 = &mut s;
+#+END_SRC
+
+** Одновременно читать и писать нельзя
+
+#+BEGIN_SRC rust
+let mut s = String::from("hello");
+
+let r1 = &s; // хорошо
+let r2 = &s; // хорошо
+let r3 = &mut s; // ПРОБЛЕМА
+#+END_SRC
+
+** Ошибка
+
+#+BEGIN_SRC rust
+error[E0502]: cannot borrow `s` as mutable because
+it is also borrowed as immutable
+ --> borrow_thrice.rs:6:19
+  |
+4 |     let r1 = &s; // хорошо
+  |               - immutable borrow occurs here
+5 |     let r2 = &s; // хорошо
+6 |     let r3 = &mut s; // проблема
+  |                   ^ mutable borrow occurs here
+7 | }
+  | - immutable borrow ends here
+#+END_SRC
+
+* Висячие ссылки
+
+** Висячие ссылки
+
+#+BEGIN_SRC rust
+fn main() {
+    let reference_to_nothing = dangle();
+}
+
+fn dangle() -> &String {
+    let s = String::from("hello");
+
+    &s
+}
+#+END_SRC
+
+** Ошибка
+
+#+BEGIN_SRC text
+error[E0106]: missing lifetime specifier
+ --> dangle.rs:5:16
+  |
+5 | fn dangle() -> &String {
+  |                ^^^^^^^
+  |
+  = help: this function's return type contains a
+    borrowed value, but there is no
+    value for it to be borrowed from
+  = help: consider giving it a 'static lifetime
+
+error: aborting due to previous error
+#+END_SRC
+
+* Правила
+
+** Правила
+
+- В каждый момент времени, может существовать одно из:
+  - Одна ссылка с правом записи
+  - Любое число ссылок только на чтение
+- Ссылки всегда корректны
+
+* Домашнее задание
+
+** Домашнее задание (1)
+
+- Написать функцию, которая:
+  - Принимает usize и возвращает его же
+  - Принимает usize и печатает его значение
+  - Принимает usize и изменяет его значение
+  - Принимает строку и возвращает её же
+  - Принимает любую строку и печатает её
+  - Принимает любую строку, изменяет её первый символ на <<Z>>, а затем печатает её
+  - Принимает любую строку, изменяет её первый символ на <<Я>>, а затем печатает её
+
+** Домашнее задание (2)
+
+https://projecteuler.net/problem=8
+
+* Спасибо
