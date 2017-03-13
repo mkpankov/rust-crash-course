@@ -62,7 +62,8 @@ fn change(some_string: &String) {
 ** Ошибка
 
 #+BEGIN_SRC text
-error: cannot borrow immutable borrowed content `*some_string` as mutable
+error: cannot borrow immutable borrowed content
+`*some_string` as mutable
  --> error.rs:8:5
   |
 8 |     some_string.push_str(", world");
@@ -100,9 +101,11 @@ than once at a time
  --> borrow_twice.rs:5:19
   |
 4 |     let r1 = &mut s;
-  |                   - first mutable borrow occurs here
+  |                   - first mutable borrow
+  |                     occurs here
 5 |     let r2 = &mut s;
-  |                   ^ second mutable borrow occurs here
+  |                   ^ second mutable borrow
+  |                     occurs here
 6 | }
   | - first borrow ends here
 #+END_SRC
@@ -112,7 +115,7 @@ than once at a time
 ** Гонки данных
 
 - Доступ по двум или более указателям происходит одновременно
-- По крайней мере один доступ производит запись
+- По крайней мере один доступ --- запись
 - Доступ не синхронизирован
 
 ** Одновременно нельзя, вообще можно
@@ -196,6 +199,128 @@ error: aborting due to previous error
   - Любое число ссылок только на чтение
 - Ссылки всегда корректны
 
+* Структуры
+
+** Ссылки хранить не так просто
+
+#+BEGIN_SRC rust
+struct User {
+    username: &str,
+    email: &str,
+    sign_in_count: u64,
+    active: bool,
+}
+fn main() {
+    let user1 = User {
+        email: "someone@example.com",
+        username: "someusername123",
+        active: true,
+        sign_in_count: 1,
+    };
+}
+#+END_SRC
+
+** Переработаем код
+
+#+BEGIN_SRC rust
+  fn main() {
+      let length1 = 50;
+      let width1 = 30;
+
+      println!(
+          "Площадь прямоугольника -
+           {} квадратных пикселей.",
+          area(length1, width1)
+      );
+  }
+
+  fn area(length: u32, width: u32) -> u32 {
+      length * width
+  }
+#+END_SRC
+
+** Переработаем код - кортежи
+
+#+BEGIN_SRC rust
+  fn main() {
+      let rect1 = (50, 30);
+
+      println!(
+          "Площадь прямоугольника -
+           {} квадратных пикселей.",
+          area(rect1)
+      );
+  }
+
+  fn area(dimensions: (u32, u32)) -> u32 {
+      dimensions.0 * dimensions.1
+  }
+#+END_SRC
+
+** Переработаем код - структуры
+
+#+BEGIN_SRC rust
+  struct Rectangle {
+      length: u32,
+      width: u32,
+  }
+  fn main() {
+      let rect1 = Rectangle { length: 50, width: 30 };
+      ...
+          area(&rect1)
+      );
+  }
+  fn area(rectangle: &Rectangle) -> u32 {
+      rectangle.length * rectangle.width
+  }
+#+END_SRC
+
+* Печатаем структуры
+
+** Попытаемся печатать Rectangle
+
+#+BEGIN_SRC rust
+struct Rectangle {
+    length: u32,
+    width: u32,
+}
+
+fn main() {
+    let rect1 = Rectangle { length: 50, width: 30 };
+
+    println!("rect1 is {}", rect1);
+}
+// error[E0277]: the trait bound `Rectangle:
+   std::fmt::Display` is not satisfied
+#+END_SRC
+
+** Печатаем через Debug
+
+#+BEGIN_SRC rust
+#[derive(Debug)]
+struct Rectangle {
+    length: u32,
+    width: u32,
+}
+
+fn main() {
+    let rect1 = Rectangle { length: 50, width: 30 };
+
+    println!("rect1 is {:?}", rect1);
+}
+// rect1 is Rectangle { length: 50, width: 30 }
+#+END_SRC
+
+** Печатаем через Debug красиво
+
+#+BEGIN_SRC rust
+    println!("rect1 is {:#?}", rect1);
+// rect1 is Rectangle {
+    length: 50,
+    width: 30
+}
+#+END_SRC
+
 * Домашнее задание
 
 ** Домашнее задание (1)
@@ -212,5 +337,12 @@ error: aborting due to previous error
 ** Домашнее задание (2)
 
 https://projecteuler.net/problem=8
+
+** Домашнее задание (3)
+
+- Написать функцию, которая:
+  - Складывает трёхмерные вектора
+  - Умножает трёхмерные вектора
+  - Умножает вектор на скаляр
 
 * Спасибо
