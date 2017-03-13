@@ -1,0 +1,283 @@
+#+TITLE: Rust №5. Синтаксис методов
+#+AUTHOR: Панков Михаил
+#+DATE: Февраль 2017
+#+EMAIL: work@michaelpankov.com
+#+LANGUAGE: ru
+#+CATEGORY: task
+#+OPTIONS:   H:2 num:t toc:nil \n:nil @:t ::t |:t ^:t -:t f:t *:t <:t
+#+OPTIONS:   TeX:t LaTeX:t skip:nil d:nil todo:t pri:nil tags:not-in-toc
+#+INFOJS_OPT: view:nil toc:nil ltoc:t mouse:underline buttons:0 path:http://orgmode.org/org-info.js
+#+EXPORT_SELECT_TAGS: export
+#+EXPORT_EXCLUDE_TAGS: noexport
+#+LINK_UP:
+#+LINK_HOME:
+#+startup: beamer
+#+LaTeX_CLASS: beamer
+# +LaTeX_CLASS_OPTIONS: [notes]
+#+COLUMNS: %40ITEM %10BEAMER_env(Env) %9BEAMER_envargs(Env Args) %4BEAMER_col(Col) %10BEAMER_extra(Extra)
+#+latex_header: \usepackage[english,russian]{babel}
+#+latex_header: \mode<beamer>{\usetheme{metropolis}}
+
+* Синтаксис методов
+** Определяем методы
+#+BEGIN_SRC rust
+#[derive(Debug)]
+struct Rectangle {
+    length: u32,
+    width: u32,
+}
+
+impl Rectangle {
+    fn area(&self) -> u32 {
+        self.length * self.width
+    }
+}
+#+END_SRC
+
+** Вызываем методы
+#+BEGIN_SRC rust
+  fn main() {
+      let rect1 = Rectangle {
+          length: 50, width: 30
+      };
+
+      println!(
+          "Площадь прямоугольника - "
+          "{} квадратных пикселей.",
+          rect1.area()
+      );
+  }
+#+END_SRC
+
+** Методы с другими аргументами
+
+#+BEGIN_SRC rust
+  struct Point {
+      x: f64,
+      y: f64,
+  }
+
+  impl Point {
+      fn distance(&self, other: &Point) -> f64 {
+          ((other.x - self.x).powf(2.0)
+         + (other.y - self.y).powf(2.0))
+              .sqrt()
+      }
+  }
+#+END_SRC
+
+** Методы с другими аргументами
+#+BEGIN_SRC rust
+  fn main() {
+      let p1 = Point { x: 1.0, y: 2.0 };
+      let p2 = Point { x: 3.0, y: 4.0 };
+      let d1 = (&p1).distance(&p2);
+  }
+#+END_SRC
+
+** Автоматическое взятие адреса и разыменование
+#+BEGIN_SRC rust
+fn main() {
+    let p1 = Point { x: 1.0, y: 2.0 };
+    let p2 = Point { x: 3.0, y: 4.0 };
+    let d1 = (&p1).distance(&p2);
+    let d2 = p1.distance(&p2);
+    let d3 = (&&p1).distance(&p2);
+    let d4 = p1.distance(p2); // не работает
+}
+#+END_SRC
+
+** Ассоциированные функции
+
+#+BEGIN_SRC rust
+impl Rectangle {
+    fn square(size: u32) -> Rectangle {
+        Rectangle { length: size, width: size }
+    }
+}
+#+END_SRC
+
+* Перечисления
+
+** Определяем перечисление
+
+#+BEGIN_SRC rust
+enum IpAddrKind {
+    V4,
+    V6,
+}
+#+END_SRC
+
+** Значения перечислений
+
+#+BEGIN_SRC rust
+let four = IpAddrKind::V4;
+let six = IpAddrKind::V6;
+#+END_SRC
+
+** Функция, принимающее перечисление
+
+#+BEGIN_SRC rust
+fn route(ip_type: IpAddrKind) { }
+
+route(IpAddrKind::V4);
+route(IpAddrKind::V6);
+#+END_SRC
+
+** Пример с адресами
+
+#+BEGIN_SRC rust
+enum IpAddrKind {
+    V4,
+    V6,
+}
+
+struct IpAddr {
+    kind: IpAddrKind,
+    address: String,
+}
+#+END_SRC
+
+** Пример с адресами (прод.)
+
+#+BEGIN_SRC rust
+let home = IpAddr {
+    kind: IpAddrKind::V4,
+    address: String::from("127.0.0.1"),
+};
+
+let loopback = IpAddr {
+    kind: IpAddrKind::V6,
+    address: String::from("::1"),
+};
+#+END_SRC
+
+** Переписываем пример с адресами
+
+#+BEGIN_SRC rust
+enum IpAddr {
+    V4(String),
+    V6(String),
+}
+
+let home = IpAddr::V4(String::from("127.0.0.1"));
+
+let loopback = IpAddr::V6(String::from("::1"));
+#+END_SRC
+
+** Переписываем пример с адресами по-другому
+
+#+BEGIN_SRC rust
+enum IpAddr {
+    V4(u8, u8, u8, u8),
+    V6(String),
+}
+
+let home = IpAddr::V4(127, 0, 0, 1);
+
+let loopback = IpAddr::V6(String::from("::1"));
+#+END_SRC
+
+** Переписываем пример с адресами по-третьему
+
+#+BEGIN_SRC rust
+struct Ipv4Addr {
+    // опускаем подробности
+}
+
+struct Ipv6Addr {
+    // опускаем подробности
+}
+
+enum IpAddr {
+    V4(Ipv4Addr),
+    V6(Ipv6Addr),
+}
+#+END_SRC
+
+* Другой пример
+
+** Другой пример
+
+#+BEGIN_SRC rust
+enum Message {
+    Quit,
+    Move { x: i32, y: i32 },
+    Write(String),
+    ChangeColor(i32, i32, i32),
+}
+#+END_SRC
+
+** То же самое, что такой набор структур
+
+#+BEGIN_SRC rust
+struct QuitMessage; // единичная структура
+struct MoveMessage {
+    x: i32,
+    y: i32,
+}
+struct WriteMessage(String);
+  // кортежная структура
+struct ChangeColorMessage(i32, i32, i32);
+  // кортежная структура
+#+END_SRC
+
+** Обработка сообщений в этом примере
+
+#+BEGIN_SRC rust
+impl Message {
+    fn call(&self) {
+        // тело метода
+    }
+}
+
+let m = Message::Write(String::from("привет"));
+m.call();
+#+END_SRC
+
+* Перечисление Option
+
+** Перечисление Option
+
+#+BEGIN_SRC rust
+enum Option<T> {
+    Some(T),
+    None,
+}
+#+END_SRC
+
+** Пример
+
+#+BEGIN_SRC rust
+let some_number = Some(5);
+let some_string = Some("строка");
+
+let absent_number: Option<i32> = None;
+#+END_SRC
+
+** Не работающий пример
+
+#+BEGIN_SRC rust
+let x: i8 = 5;
+let y: Option<i8> = Some(5);
+
+let sum = x + y;
+#+END_SRC
+
+* Домашнее задание
+
+** Домашнее задание
+
+- Написать структуру трёхмерного вектора
+- Написать методы:
+  - Создания вектора по трём компонентам с плавающей точкой
+  - Создания вектора по трём компонентам-целым
+  - Сложения векторов
+  - Умножения векторов
+  - Умножения вектора на скаляр
+  - Изменения компонентов вектора
+- Сделать так, чтобы методы можно было вызывать на одной и той же
+  структуре многократно
+- Сделать структуру распечатываемой в отладочном виде
+
+* Спасибо
