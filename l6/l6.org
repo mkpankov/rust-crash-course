@@ -1,0 +1,483 @@
+#+TITLE: Rust №6. match, if let, модули
+#+AUTHOR: Панков Михаил
+#+DATE: Февраль 2017
+#+EMAIL: work@michaelpankov.com
+#+LANGUAGE: ru
+#+CATEGORY: task
+#+OPTIONS:   H:2 num:t toc:nil \n:nil @:t ::t |:t ^:t -:t f:t *:t <:t
+#+OPTIONS:   TeX:t LaTeX:t skip:nil d:nil todo:t pri:nil tags:not-in-toc
+#+INFOJS_OPT: view:nil toc:nil ltoc:t mouse:underline buttons:0 path:http://orgmode.org/org-info.js
+#+EXPORT_SELECT_TAGS: export
+#+EXPORT_EXCLUDE_TAGS: noexport
+#+LINK_UP:
+#+LINK_HOME:
+#+startup: beamer
+#+LaTeX_CLASS: beamer
+# +LaTeX_CLASS_OPTIONS: [notes]
+#+COLUMNS: %40ITEM %10BEAMER_env(Env) %9BEAMER_envargs(Env Args) %4BEAMER_col(Col) %10BEAMER_extra(Extra)
+#+latex_header: \usepackage[english,russian]{babel}
+#+latex_header: \mode<beamer>{\usetheme{metropolis}}
+
+* Оператор match
+
+** Оператор match
+
+#+BEGIN_SRC rust
+enum Coin {
+    Penny,
+    Nickel,
+    Dime,
+    Quarter,
+}
+fn value_in_cents(coin: Coin) -> i32 {
+    match coin {
+        Coin::Penny => 1,
+        Coin::Nickel => 5,
+        Coin::Dime => 10,
+        Coin::Quarter => 25,
+    }
+}
+#+END_SRC
+
+** Ветви с множеством операторов
+
+#+BEGIN_SRC rust
+fn value_in_cents(coin: Coin) -> i32 {
+    match coin {
+        Coin::Penny => {
+            println!("Счастливый пенни!");
+            1
+        },
+        Coin::Nickel => 5,
+        Coin::Dime => 10,
+        Coin::Quarter => 25,
+    }
+}
+#+END_SRC
+
+** Сопоставление с образцом
+
+#+BEGIN_SRC rust
+#[derive(Debug)]
+enum UsState {
+    Alabama,
+    Alaska,
+    // ... etc
+}
+
+enum Coin {
+    Penny,
+    Nickel,
+    Dime,
+    Quarter(UsState),
+}
+#+END_SRC
+
+** Сопоставление с образцом (прод.)
+
+#+BEGIN_SRC rust
+fn value_in_cents(coin: Coin) -> i32 {
+    match coin {
+        Coin::Penny => 1,
+        Coin::Nickel => 5,
+        Coin::Dime => 10,
+        Coin::Quarter(state) => {
+            println!("Четвертак из штата {:?}!",
+                     state);
+            25
+        },
+    }
+}
+#+END_SRC
+
+** Сопоставление с Option<T>
+
+#+BEGIN_SRC rust
+fn plus_one(x: Option<i32>) -> Option<i32> {
+    match x {
+        None => None,
+        Some(i) => Some(i + 1),
+    }
+}
+
+let five = Some(5);
+let six = plus_one(five);
+let none = plus_one(None);
+#+END_SRC
+
+** Проверка полноты сопоставления
+
+#+BEGIN_SRC rust
+fn plus_one(x: Option<i32>) -> Option<i32> {
+    match x {
+        Some(i) => Some(i + 1),
+    }
+}
+
+error[E0004]: non-exhaustive patterns: `None`
+not covered  -->
+  |
+6 |         match x {
+  |               ^ pattern `None` not covered
+#+END_SRC
+
+** Заглушка _
+
+#+BEGIN_SRC rust
+let some_u8_value = 0u8;
+match some_u8_value {
+    1 => println!("один"),
+    3 => println!("три"),
+    5 => println!("пять"),
+    7 => println!("семь"),
+    _ => (),
+}
+#+END_SRC
+
+* if let
+
+** if let
+
+#+BEGIN_SRC rust
+let some_u8_value = Some(0u8);
+match some_u8_value {
+    Some(3) => println!("три"),
+    _ => (),
+}
+#+END_SRC
+
+** if let (прод.)
+
+#+BEGIN_SRC rust
+if let Some(3) = some_u8_value {
+    println!("три");
+}
+#+END_SRC
+
+** Другой пример с match
+
+#+BEGIN_SRC rust
+let mut count = 0;
+match coin {
+    Coin::Quarter(state) =>
+      println!("Четвертак из штата {:?}!", state),
+    _ => count += 1,
+}
+#+END_SRC
+
+** Переписываем с if let
+
+#+BEGIN_SRC rust
+let mut count = 0;
+if let Coin::Quarter(state) = coin {
+    println!("Четвертак из штата {:?}!", state);
+} else {
+    count += 1;
+}
+#+END_SRC
+
+* Модули
+
+** Модули
+
+- Новый модуль объявляется с помощью ~mod~
+
+- По умолчанию всё скрыто, включая модули. Модуль становится видимым наружу если
+  он ~pub~
+
+- ~use~ привносит модули или имена из них в область видимости, чтобы к ним было
+  легче обращаться
+
+* Модули и файловая система
+
+* Определяем модули
+
+** Создаём проект с примером
+
+#+BEGIN_SRC text
+$ cargo new communicator
+$ cd communicator
+#+END_SRC
+
+** Содержимое проекта
+
+~src/lib.rs~:
+#+BEGIN_SRC rust
+#[cfg(test)]
+mod tests {
+    #[test]
+    fn it_works() {
+    }
+}
+#+END_SRC
+
+** Простейший модуль
+
+#+BEGIN_SRC rust
+  mod network {
+      fn connect() {
+      }
+  }
+
+  fn foo() {
+      network::connect();
+  }
+#+END_SRC
+
+** Два модуля
+
+#+BEGIN_SRC rust
+mod network {
+    fn connect() {
+    }
+}
+
+mod client {
+    fn connect() {
+    }
+}
+#+END_SRC
+
+** Структура с двумя модулями
+
+#+BEGIN_SRC text
+communicator
+ ├── network
+ └── client
+#+END_SRC
+
+** Вложенные модули
+
+#+BEGIN_SRC rust
+  mod network {
+      fn connect() {
+      }
+
+      mod client {
+          fn connect() {
+          }
+      }
+  }
+
+  fn foo() {
+      network::connect();
+      network::client::connect();
+  }
+#+END_SRC
+
+** Структура с вложенными модулями
+
+#+BEGIN_SRC text
+communicator
+ └── network
+     └── client
+#+END_SRC
+
+* Складываем модули в отдельные файлы
+
+** Три модуля в lib.rs
+
+#+BEGIN_SRC rust
+mod client {
+    fn connect() {
+    }
+}
+
+mod network {
+    fn connect() {
+    }
+
+    mod server {
+        fn connect() {
+        }
+    }
+}
+#+END_SRC
+
+** Структура с тремя модулями
+
+#+BEGIN_SRC rust
+communicator
+ ├── client
+ └── network
+     └── server
+#+END_SRC
+
+** Выносим client в отдельный файл (1)
+
+~src/lib.rs~:
+#+BEGIN_SRC rust
+mod client;
+
+mod network {
+    fn connect() {
+    }
+
+    mod server {
+        fn connect() {
+        }
+    }
+}
+#+END_SRC
+
+** Выносим client в отдельный файл (2)
+
+~src/client.rs~:
+#+BEGIN_SRC rust
+fn connect() {
+}
+#+END_SRC
+
+** Собираем
+
+#+BEGIN_SRC text
+$ cargo build
+   Compiling communicator v0.1.0
+warning: function is never used: `connect`,
+#[warn(dead_code)] on by default
+ --> src/client.rs:1:1
+  |
+1 | fn connect() {
+  | ^
+...
+#+END_SRC
+
+** Выносим network в отдельный файл (1)
+
+~src/lib.rs~:
+#+BEGIN_SRC rust
+mod client;
+
+mod network;
+#+END_SRC
+
+** Выносим network в отдельный файл (2)
+~src/network.rs~:
+#+BEGIN_SRC rust
+fn connect() {
+}
+
+mod server {
+    fn connect() {
+    }
+}
+#+END_SRC
+
+** Собираем
+
+- Успех
+
+** Выносим server в отдельный файл (1)
+
+~src/network.rs~:
+#+BEGIN_SRC rust
+fn connect() {
+}
+
+mod server;
+#+END_SRC
+
+** Выносим server в отдельный файл (2)
+
+~src/server.rs~:
+#+BEGIN_SRC rust
+fn connect() {
+}
+#+END_SRC
+
+** Собираем
+
+#+BEGIN_SRC text
+$ cargo build
+   Compiling communicator v0.1.0
+error: cannot declare a new module at this location
+ --> src/network.rs:4:5
+4 | mod server;
+  |     ^^^^^^
+note: maybe move this module `network` to its own
+directory via `network/mod.rs`
+note: ... or maybe `use` the module `server`
+instead of possibly redeclaring it
+#+END_SRC
+
+** Исправляем
+
+#+BEGIN_SRC text
+$ mkdir src/network
+$ mv src/network.rs src/network/mod.rs
+$ mv src/server.rs src/network
+#+END_SRC
+
+** Текущая структура и файлы
+
+#+BEGIN_SRC text
+communicator
+ ├── client
+ └── network
+     └── server
+#+END_SRC
+
+#+BEGIN_SRC text
+├── src
+│   ├── client.rs
+│   ├── lib.rs
+│   └── network
+│       ├── mod.rs
+│       └── server.rs
+#+END_SRC
+
+** Почему нужна поддиректория
+
+#+BEGIN_SRC text
+communicator
+ ├── client
+ └── network
+     └── client
+#+END_SRC
+
+* Правила файловых систем модулей
+
+** Правила файловых систем модулей
+
+- Если у модуля ~foo~ нет подмодулей, код для него нужно писать в ~foo.rs~
+
+- Если у модуля ~foo~ есть подмодули, код для него нужно писать в ~foo/mod.rs~
+
+- Эти правила применяются рекурсивно
+
+** Пример
+
+#+BEGIN_SRC text
+├── foo
+│   ├── bar.rs
+(код для `foo::bar`)
+│   └── mod.rs
+(код для `foo`, включая `mod bar`)
+#+END_SRC
+
+* Домашнее задание
+
+** Домашнее задание (1)
+
+- Описать цвет с возможностью задавать его следующими способами:
+  - RGB
+  - HSV
+  - Grayscale
+- Написать методы преобразования из RGB в:
+  - HSV
+  - Grayscale
+- Сделать массив цветов для изображения 64х64 и преобразовать его из RGB в
+  другие 2 модели
+- Положить весь этот код в модуль colors с подмодулями для каждой модели
+- Сделать чтобы цвет можно было выводить в текстовом отладочном виде
+
+** Домашнее задание (2)
+
+- Сделать метод, который дискретизует Grayscale в моно-цвет и выводит
+  изображение в виде ASCII-графики в терминал, кодируя уровни цвета с помощью
+  пробела и ~X~
+- Сделать метод, который дискретизует Grayscale в 4 уровня цвета и выводит
+  изображение в виде ASCII-графики в терминал, кодируя уровни цвета с помощью
+  пробела, ~.~, ~|~ и ~X~
+
+* Спасибо
