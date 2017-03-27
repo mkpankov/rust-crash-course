@@ -1,0 +1,417 @@
+#+TITLE: Rust №7. Модули (продолжение)
+#+AUTHOR: Панков Михаил
+#+DATE: Февраль 2017
+#+EMAIL: work@michaelpankov.com
+#+LANGUAGE: ru
+#+CATEGORY: task
+#+OPTIONS:   H:2 num:t toc:nil \n:nil @:t ::t |:t ^:t -:t f:t *:t <:t
+#+OPTIONS:   TeX:t LaTeX:t skip:nil d:nil todo:t pri:nil tags:not-in-toc
+#+INFOJS_OPT: view:nil toc:nil ltoc:t mouse:underline buttons:0 path:http://orgmode.org/org-info.js
+#+EXPORT_SELECT_TAGS: export
+#+EXPORT_EXCLUDE_TAGS: noexport
+#+LINK_UP:
+#+LINK_HOME:
+#+startup: beamer
+#+LaTeX_CLASS: beamer
+# +LaTeX_CLASS_OPTIONS: [notes]
+#+COLUMNS: %40ITEM %10BEAMER_env(Env) %9BEAMER_envargs(Env Args) %4BEAMER_col(Col) %10BEAMER_extra(Extra)
+#+latex_header: \usepackage[english,russian]{babel}
+#+latex_header: \mode<beamer>{\usetheme{metropolis}}
+
+* Управление видимостью с помощью pub
+** Почему выдаются предупреждения?
+
+#+BEGIN_SRC text
+warning: function is never used: `connect`,
+  #[warn(dead_code)] on by default
+src/client.rs:1:1
+  |
+1 | fn connect() {
+  | ^
+#+END_SRC
+
+** Проверим: создадим программу
+
+~src/main.rs~:
+
+#+BEGIN_SRC rust
+extern crate communicator;
+
+fn main() {
+    communicator::client::connect();
+}
+#+END_SRC
+
+** Не скомпилируется
+
+#+BEGIN_SRC rust
+error: module `client` is private
+ --> src/main.rs:4:5
+  |
+4 |     communicator::client::connect();
+  |     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+#+END_SRC
+
+* Делаем функцию общей
+
+** Делаем модуль общим
+
+~src/lib.rs~:
+
+#+BEGIN_SRC rust
+pub mod client;
+
+mod network;
+#+END_SRC
+
+** Опять не компилируется
+
+#+BEGIN_SRC text
+<warnings>
+error: function `connect` is private
+ --> src/main.rs:4:5
+  |
+4 |     communicator::client::connect();
+  |     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+#+END_SRC
+
+** Делаем функцию общей
+
+#+BEGIN_SRC rust
+pub fn connect() {
+}
+#+END_SRC
+
+** Компилируется
+
+- И предупреждение про неиспользованную функцию исчезло
+
+** Делаем другую функцию общей
+
+~src/network/mod.rs~:
+#+BEGIN_SRC rust
+pub fn connect() {
+}
+
+mod server;
+#+END_SRC
+
+** Всё равно предупреждение
+
+#+BEGIN_SRC text
+warning: function is never used: `connect`,
+  #[warn(dead_code)] on by default
+ --> src/network/mod.rs:1:1
+  |
+1 | pub fn connect() {
+  | ^
+#+END_SRC
+
+** Делаем модуль тоже общим
+
+~src/lib.rs~:
+#+BEGIN_SRC rust
+pub mod client;
+
+pub mod network;
+#+END_SRC
+
+** Компилируется
+
+- Предупреждение пропадает
+
+* Правила сокрытия
+
+** Правила сокрытия
+
+- Если элемент общий, к нему есть доступ из любого родительского модуля
+- Если элемент скрытый, к нему есть доступ только из текущего и дочерних модулей
+
+* Пример сокрытия
+
+** Пример сокрытия
+
+~src/lib.rs~:
+#+BEGIN_SRC rust
+mod outermost {
+    pub fn middle_function() {}
+
+    fn middle_secret_function() {}
+
+    mod inside {
+        pub fn inner_function() {}
+
+        fn secret_function() {}
+    }
+}
+#+END_SRC
+
+** Пример сокрытия (2)
+
+~src/lib.rs~:
+
+#+BEGIN_SRC rust
+fn try_me() {
+    outermost::middle_function();
+    outermost::middle_secret_function();
+    outermost::inside::inner_function();
+    outermost::inside::secret_function();
+}
+#+END_SRC
+
+** Какие функции можно вызвать?
+
+- ~outermost::middle_function();~
+- ~outermost::middle_secret_function();~
+- ~outermost::inside::inner_function();~
+- ~outermost::inside::secret_function();~
+
+** Какие функции можно вызвать?
+
+- ~outermost::middle_function();~
+  - Да
+- ~outermost::middle_secret_function();~
+- ~outermost::inside::inner_function();~
+- ~outermost::inside::secret_function();~
+
+** Какие функции можно вызвать?
+
+- ~outermost::middle_function();~
+  - Да
+- ~outermost::middle_secret_function();~
+  - Нет
+- ~outermost::inside::inner_function();~
+- ~outermost::inside::secret_function();~
+
+** Какие функции можно вызвать?
+
+- ~outermost::middle_function();~
+  - Да
+- ~outermost::middle_secret_function();~
+  - Нет
+- ~outermost::inside::inner_function();~
+  - Нет
+- ~outermost::inside::secret_function();~
+
+** Какие функции можно вызвать?
+
+- ~outermost::middle_function();~
+  - Да
+- ~outermost::middle_secret_function();~
+  - Нет
+- ~outermost::inside::inner_function();~
+  - Нет
+- ~outermost::inside::secret_function();~
+  - Нет
+
+* Больше вопросов
+
+** Больше вопросов (1)
+
+- Что если модуль ~inside~ будет общим?
+
+** Больше вопросов (2)
+
+- Что если модуль ~outermost~ будет общим и ~inside~ будет скрытым?
+
+** Больше вопросов (3)
+
+- Что если в теле ~inner_function~ мы вызовем ~::outermost::middle_secret_function()~?
+
+* Импортирование имён
+
+** Импортирование имён
+
+~src/main.rs~:
+#+BEGIN_SRC rust
+pub mod a {
+    pub mod series {
+        pub mod of {
+            pub fn nested_modules() {}
+        }
+    }
+}
+
+fn main() {
+    a::series::of::nested_modules();
+}
+
+#+END_SRC
+
+* Краткие импорты с use
+
+** Можно импортировать модуль
+
+#+BEGIN_SRC rust
+pub mod a {
+    pub mod series {
+        pub mod of {
+            pub fn nested_modules() {}
+        }
+    }
+}
+
+use a::series::of;
+
+fn main() {
+    of::nested_modules();
+}
+#+END_SRC
+
+** Можно импортировать функцию
+
+#+BEGIN_SRC rust
+pub mod a {
+    pub mod series {
+        pub mod of {
+            pub fn nested_modules() {}
+        }
+    }
+}
+
+use a::series::of::nested_modules;
+
+fn main() {
+    nested_modules();
+}
+#+END_SRC
+
+** С перечислениями то же самое
+
+#+BEGIN_SRC rust
+enum TrafficLight {
+    Red,
+    Yellow,
+    Green,
+}
+
+use TrafficLight::{Red, Yellow};
+
+fn main() {
+    let red = Red;
+    let yellow = Yellow;
+    let green = TrafficLight::Green;
+}
+#+END_SRC
+
+** Импорт со звёздочкой
+
+#+BEGIN_SRC rust
+enum TrafficLight {
+    Red,
+    Yellow,
+    Green,
+}
+
+use TrafficLight::*;
+
+fn main() {
+    let red = Red;
+    let yellow = Yellow;
+    let green = Green;
+}
+#+END_SRC
+
+* Использование super для доступа к родителю
+
+** Предыдущий пример с communicator
+
+~src/lib.rs~:
+#+BEGIN_SRC rust
+pub mod client;
+
+pub mod network;
+
+#[cfg(test)]
+mod tests {
+    #[test]
+    fn it_works() {
+    }
+}
+#+END_SRC
+
+** Структура модулей
+
+#+BEGIN_SRC text
+communicator
+ ├── client
+ ├── network
+ |   └── client
+ └── tests
+#+END_SRC
+
+** Пробуем вызвать функцию
+
+~src/lib.rs~:
+#+BEGIN_SRC rust
+#[cfg(test)]
+mod tests {
+    #[test]
+    fn it_works() {
+        client::connect();
+    }
+}
+#+END_SRC
+
+** Не компилируется
+
+#+BEGIN_SRC text
+     Compiling communicator v0.1.0
+  error[E0433]: failed to resolve.
+    Use of undeclared type or module `client`
+   --> src/lib.rs:9:9
+    |
+  9 |         client::connect();
+    |         ^^^^^^^^^^^^^^^
+    | Use of undeclared type or module `client`
+#+END_SRC
+
+** Вариант 1: от корня контейнера
+
+#+BEGIN_SRC rust
+::client::connect();
+#+END_SRC
+
+** Вариант 2: доступ к родителю
+
+#+BEGIN_SRC rust
+super::client::connect();
+#+END_SRC
+
+** Исправляем
+
+~src/lib.rs~:
+#+BEGIN_SRC rust
+#[cfg(test)]
+mod tests {
+    use super::client;
+
+    #[test]
+    fn it_works() {
+        client::connect();
+    }
+}
+#+END_SRC
+
+** Работает
+
+#+BEGIN_SRC text
+$ cargo test
+   Compiling communicator v0.1.0
+     Running
+       target/debug/communicator-92007ddb5330fa5a
+
+running 1 test
+test tests::it_works ... ok
+
+test result: ok. 1 passed; 0 failed;
+                 0 ignored; 0 measured
+#+END_SRC
+
+* Домашнее задание
+
+** Домашнее задание
+
+- Завершить раскладывание моделей цветов из предыдущего урока по под-модулям
+
+* Спасибо
