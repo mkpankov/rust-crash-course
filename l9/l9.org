@@ -1,0 +1,416 @@
+#+TITLE: Rust №9. Обработка ошибок
+#+AUTHOR: Панков Михаил
+#+DATE: Февраль 2017
+#+EMAIL: work@michaelpankov.com
+#+LANGUAGE: ru
+#+CATEGORY: task
+#+OPTIONS:   H:2 num:t toc:nil \n:nil @:t ::t |:t ^:t -:t f:t *:t <:t
+#+OPTIONS:   TeX:t LaTeX:t skip:nil d:nil todo:t pri:nil tags:not-in-toc
+#+INFOJS_OPT: view:nil toc:nil ltoc:t mouse:underline buttons:0 path:http://orgmode.org/org-info.js
+#+EXPORT_SELECT_TAGS: export
+#+EXPORT_EXCLUDE_TAGS: noexport
+#+LINK_UP:
+#+LINK_HOME:
+#+startup: beamer
+#+LaTeX_CLASS: beamer
+# +LaTeX_CLASS_OPTIONS: [notes]
+#+COLUMNS: %40ITEM %10BEAMER_env(Env) %9BEAMER_envargs(Env Args) %4BEAMER_col(Col) %10BEAMER_extra(Extra)
+#+latex_header: \usepackage[english,russian]{babel}
+#+latex_header: \mode<beamer>{\usetheme{metropolis}}
+
+* Ошибки
+
+** Ошибки
+
+- Восстановимые
+- Невосстановимые
+
+** Восстановимые
+
+- Есть смысл попробовать ещё
+- Файл не найден
+
+** Невосстановимые
+
+- Нет смысла продолжать работу
+- Обращение к элементу вне границ массива
+
+** Подход
+
+- Нет исключений
+- ~panic!~
+- ~Result<T, E>~
+
+* panic!
+
+** Паника
+
+- Напечатает сообщение об ошибке
+- Напечатает backtrace (если попросить)
+- Размотает стек
+- Вызовет деструкторы
+- Выйдет из программы
+
+** Можно не делать размотку
+
+~Cargo.toml~:
+#+BEGIN_SRC text
+[profile.release]
+panic = 'abort'
+#+END_SRC
+
+** Как выглядит паника
+
+#+BEGIN_SRC rust
+fn main() {
+    panic!("сломайся и сгори");
+}
+#+END_SRC
+
+** Как выглядит паника (прод.)
+
+#+BEGIN_SRC rust
+$ cargo run
+   Compiling panic v0.1.0 (file:///projects/panic)
+    Finished debug [unoptimized + debuginfo]
+     Running `target/debug/panic`
+thread 'main' panicked at 'сломайся и сгори',
+  src/main.rs:2
+note: Run with `RUST_BACKTRACE=1` for a backtrace.
+error: Process didn't exit successfully:
+  `target/debug/panic` (exit code: 101)
+#+END_SRC
+
+** Иногда панику вызывает чужой код
+
+- Можно понять по backtrace
+
+* Используем backtrace
+
+** Пример
+
+#+BEGIN_SRC rust
+fn main() {
+    let v = vec![1, 2, 3];
+
+    v[100];
+}
+#+END_SRC
+
+** Результат
+
+#+BEGIN_SRC text
+$ cargo run
+   Compiling panic v0.1.0 (file:///projects/panic)
+    Finished debug [unoptimized + debuginfo]
+     Running `target/debug/panic`
+thread 'main' panicked at 'index out of bounds:
+  the len is 3 but the index is 100',
+  /stable-dist-rustc/build/src/libcollections/
+    vec.rs:1362
+note: Run with `RUST_BACKTRACE=1` for a backtrace.
+error: Process didn't exit successfully:
+  `target/debug/panic` (exit code: 101)
+#+END_SRC
+
+* Демонстрация backtrace
+
+* Восстановимые ошибки с Result
+
+** Тип Result
+
+#+BEGIN_SRC rust
+enum Result<T, E> {
+    Ok(T),
+    Err(E),
+}
+#+END_SRC
+
+** Пример с открытием файла
+
+#+BEGIN_SRC rust
+use std::fs::File;
+
+fn main() {
+    let f = File::open("hello.txt");
+}
+#+END_SRC
+
+** Проверим тип возвращаемого значения
+
+#+BEGIN_SRC rust
+let f: u32 = File::open("hello.txt");
+#+END_SRC
+
+** Результат проверки
+
+#+BEGIN_SRC text
+error[E0308]: mismatched types
+ --> src/main.rs:4:18
+  |
+4 |     let f: u32 = File::open("hello.txt");
+  |                  ^^^^^^^^^^^^^^^^^^^^^^^
+  |                  expected u32, found enum
+`std::result::Result`
+  |
+  = note: expected type `u32`
+  = note:    found type
+  `std::result::Result<std::fs::File,
+                       std::io::Error>`
+#+END_SRC
+
+** Обрабатываем ошибку
+
+#+BEGIN_SRC rust
+use std::fs::File;
+
+fn main() {
+    let f = File::open("hello.txt");
+
+    let f = match f {
+        Ok(file) => file,
+        Err(error) => {
+            panic!("Ошибка открытия: {:?}", error)
+        },
+    };
+}
+#+END_SRC
+
+** Результат обработки
+
+#+BEGIN_SRC rust
+thread 'main' panicked at 'There was a problem
+opening the file: Error { repr: Os { code: 2,
+message: "No such file or directory" } }',
+src/main.rs:8
+#+END_SRC
+
+* Обрабатываем разные ошибки
+
+** Сложный пример с файлом
+
+- Демо
+
+* Для удобства: unwrap, expect
+
+** unwrap
+
+#+BEGIN_SRC rust
+use std::fs::File;
+
+fn main() {
+    let f = File::open("hello.txt").unwrap();
+}
+#+END_SRC
+
+** expect
+
+#+BEGIN_SRC rust
+  use std::fs::File;
+
+  fn main() {
+      let f = File::open("hello.txt")
+          .expect("Failed to open hello.txt");
+  }
+#+END_SRC
+
+** Результат expect
+
+#+BEGIN_SRC text
+thread 'main' panicked at 'Failed to open
+hello.txt: Error { repr: Os { code:
+2, message: "No such file or directory" } }',
+/stable-dist-rustc/build/src/libcore/result.rs:868
+#+END_SRC
+
+* Проброс ошибок
+
+** Функция с Result
+
+#+BEGIN_SRC rust
+  fn read_username_from_file() ->
+      Result<String, io::Error>
+  {
+      let f = File::open("hello.txt");
+      let mut f = match f {
+          Ok(file) => file,
+          Err(e) => return Err(e),
+      };
+      let mut s = String::new();
+      match f.read_to_string(&mut s) {
+          Ok(_) => Ok(s),
+          Err(e) => Err(e),
+      }
+  }
+#+END_SRC
+
+* Удобство для проброса ошибки: ?
+
+** Пример c ?
+
+#+BEGIN_SRC rust
+  use std::io;
+  use std::io::Read;
+  use std::fs::File;
+
+  fn read_username_from_file() ->
+      Result<String, io::Error>
+  {
+      let mut f = File::open("hello.txt")?;
+      let mut s = String::new();
+      f.read_to_string(&mut s)?;
+      Ok(s)
+  }
+#+END_SRC
+
+** Короткий пример с ?
+
+#+BEGIN_SRC rust
+  use std::io;
+  use std::io::Read;
+  use std::fs::File;
+
+  fn read_username_from_file() ->
+      Result<String, io::Error>
+  {
+      let mut s = String::new();
+
+      File::open("hello.txt")?
+        .read_to_string(&mut s)?;
+
+      Ok(s)
+  }
+#+END_SRC
+
+* ? - только если возвращается Result
+
+** Пример с main
+
+#+BEGIN_SRC rust
+use std::fs::File;
+
+fn main() {
+    let f = File::open("hello.txt")?;
+}
+#+END_SRC
+
+** Не компилируется
+
+#+BEGIN_SRC text
+  error[E0308]: mismatched types
+   -->
+    |
+  3 |     let f = File::open("hello.txt")?;
+    |             ^^^^^^^^^^^^^^^^^^^^^^^^^
+    |             expected (), found enum
+  `std::result::Result`
+    |
+    = note: expected type `()`
+    = note:    found type
+    `std::result::Result<_, _>`
+
+#+END_SRC
+
+* Паниковать или не паниковать
+
+** Правила (1)
+
+- С panic писать проще
+- Панику не видно в типе функции
+- Паникуя, вы не даёте выбора
+
+** Правила (2)
+
+- Result - менее удобно
+- Result видно в типе функции
+- Result даёт выбор обработки ошибки вызывающему
+
+** Рекомендации (1)
+
+- Можно паниковать
+  - Тесты
+  - Примеры
+  - Прототипы
+
+** Рекомендации (2)
+
+- Можно делать unwrap
+  - Когда у вас больше информации, чем у компилятора
+
+#+BEGIN_SRC rust
+  use std::net::IpAddr;
+
+  let home = "127.0.0.1".parse::<IpAddr>()
+      .unwrap();
+#+END_SRC
+
+** Рекомендации (3)
+
+- Лучше паниковать
+  - Если продолжение работы вызывает нарушение инвариантов
+    - Например, функция получает противоречащие значения аргументов
+  - И к тому же
+    - <<Плохое состояние>> не является ожидаемым
+    - Последующий код полагается на то, что состояние <<не плохое>>
+    - Нет возможности отразить это в типах
+  - Если ошибка - результат работы чужого кода
+
+** Рекомендации (4)
+
+- Нужен Result
+  - Если <<плохое состояние>> будет встречаться даже если в коде нет ошибок
+  - Например, парсер получает некорректный ввод
+
+* Пользовательские типы для валидации данных
+
+** Пример с угадайкой
+
+#+BEGIN_SRC rust
+  loop {
+      let guess: i32 = match guess.trim().parse() {
+          Ok(num) => num,
+          Err(_) => continue,
+      };
+      if guess < 1 || guess > 100 {
+          println!(
+              "Тайное число между 1 и 100.");
+          continue;
+      }
+      match guess.cmp(&secret_number) {
+      // ...
+  }
+#+END_SRC
+
+** Проверка при создании значения
+
+#+BEGIN_SRC rust
+  struct Guess {
+      value: u32,
+  }
+  impl Guess {
+      pub fn new(value: u32) -> Guess {
+          if value < 1 || value > 100 {
+              panic!(
+                  "Нужно между 1 и 100, оказалось {}.",
+                  value);
+          }
+          Guess {
+              value: value,
+          }
+      }
+#+END_SRC
+
+* Домашнее задание
+
+** Домашнее задание
+
+- Прочитать из файла массив целых чисел. Каждое число на своей строке. Посчитать
+  число повторений каждого встреченного числа, вывести на экран.
+- Прочитать из файла массив трёхмерных точек. Каждая точка на своей строке.
+  Компоненты - положительные числа с плавающей точкой, разделены пробелом.
+  Вывести все точки на экран.
+- Прочитать из файла массив трёхмерных векторов и попарно сложить текущий со
+  следующим. Формат - такой же, как в предыдущем задании. Результат записать в
+  другой файл.
+
+* Спасибо
