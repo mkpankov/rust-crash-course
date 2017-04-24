@@ -1,0 +1,510 @@
+#+TITLE: Rust №10. Обобщённые типы, типажи и времена жизни
+#+AUTHOR: Панков Михаил
+#+DATE: Февраль 2017
+#+EMAIL: work@michaelpankov.com
+#+LANGUAGE: ru
+#+CATEGORY: task
+#+OPTIONS:   H:2 num:t toc:nil \n:nil @:t ::t |:t ^:t -:t f:t *:t <:t
+#+OPTIONS:   TeX:t LaTeX:t skip:nil d:nil todo:t pri:nil tags:not-in-toc
+#+INFOJS_OPT: view:nil toc:nil ltoc:t mouse:underline buttons:0 path:http://orgmode.org/org-info.js
+#+EXPORT_SELECT_TAGS: export
+#+EXPORT_EXCLUDE_TAGS: noexport
+#+LINK_UP:
+#+LINK_HOME:
+#+startup: beamer
+#+LaTeX_CLASS: beamer
+# +LaTeX_CLASS_OPTIONS: [notes]
+#+COLUMNS: %40ITEM %10BEAMER_env(Env) %9BEAMER_envargs(Env Args) %4BEAMER_col(Col) %10BEAMER_extra(Extra)
+#+latex_header: \usepackage[english,russian]{babel}
+#+latex_header: \mode<beamer>{\usetheme{metropolis}}
+
+* Обобщённые типы
+
+** Мы уже использовали обобщённые типы
+
+- ~Option<T>~
+- ~Result<T, E>~
+- ~Vec<T>~
+- ~HashMap<K, V>~
+
+** План
+
+- Устранение повторения кода через функции
+- Устранение повторения функций, отличающихся только типами
+- Типажи
+- Времена жизни
+
+** Пример: наибольшее число в списке
+
+#+BEGIN_SRC rust
+fn main() {
+    let numbers = vec![34, 50, 25, 100, 65];
+    let mut largest = numbers[0];
+    for number in numbers {
+        if number > largest {
+            largest = number;
+        }
+    }
+    println!("Наибольшее число - {}", largest);
+}
+#+END_SRC
+
+** Обрабатываем 2 списка
+
+#+BEGIN_SRC rust
+    let numbers = vec![34, 50, 25, 100, 65];
+    let mut largest = numbers[0];
+    for number in numbers {
+        if number > largest {
+            largest = number;
+    ...
+    let numbers = vec![102, 34, 6000, 89, 54, 2, 43, 8];
+    let mut largest = numbers[0];
+    for number in numbers {
+        if number > largest {
+            largest = number;
+    ...
+#+END_SRC
+
+** Устраняем повторение: функция
+
+#+BEGIN_SRC rust
+fn largest(list: &[i32]) -> i32 {
+    let mut largest = list[0];
+    for &item in list.iter() {
+        if item > largest {
+            largest = item;
+        }
+    }
+    largest
+}
+#+END_SRC
+
+** Устраняем повторение: использование
+
+#+BEGIN_SRC rust
+fn main() {
+    let numbers = vec![34, 50, 25, 100, 65];
+
+    let result = largest(&numbers);
+    println!("Наибольшее число - {}", result);
+
+    let numbers = vec![102, 34, 6000, 89, 54, 2, 43, 8];
+
+    let result = largest(&numbers);
+    println!("Наибольшее число - {}", result);
+}
+#+END_SRC
+
+** Процесс
+
+- Замечаем повторяющийся код
+- Выносим его в функцию с определёнными аргументами и возвращаемым значением
+- Заменяем повторяющийся код на вызовы функции
+
+** Другое повторение
+
+- Что если у нас 2 функции, одна из которых ищет наибольшее значение в списке
+  ~i32~, а другая - в списке ~char~?
+
+* Обобщённые типы данных
+
+* Использование обобщённых типов в определении функций
+
+** Две почти одинаковые функции (1)
+
+#+BEGIN_SRC rust
+fn largest_i32(list: &[i32]) -> i32 {
+    let mut largest = list[0];
+    for &item in list.iter() {
+        if item > largest {
+            largest = item;
+        }
+    }
+    largest
+}
+#+END_SRC
+
+** Две почти одинаковые функции (2)
+
+#+BEGIN_SRC rust
+fn largest_char(list: &[char]) -> char {
+    let mut largest = list[0];
+    for &item in list.iter() {
+        if item > largest {
+            largest = item;
+        }
+    }
+    largest
+}
+#+END_SRC
+
+** Вызывающий код
+
+#+BEGIN_SRC rust
+fn main() {
+    let numbers = vec![34, 50, 25, 100, 65];
+    let result = largest_i32(&numbers);
+    println!("Наибольшее число - {}", result);
+    let chars = vec!['y', 'm', 'a', 'q'];
+    let result = largest_char(&chars);
+    println!("Наибольший символ - {}", result);
+}
+#+END_SRC
+
+** Обобщаем функции
+
+#+BEGIN_SRC rust
+fn largest<T>(list: &[T]) -> T {
+    let mut largest = list[0];
+    for &item in list.iter() {
+        if item > largest {
+            largest = item;
+        }
+    }
+    largest
+}
+#+END_SRC
+
+** Вызов обобщённых функций
+
+#+BEGIN_SRC rust
+fn main() {
+    let numbers = vec![34, 50, 25, 100, 65];
+
+    let result = largest(&numbers);
+    println!("Наибольшее число - {}", result);
+
+    let chars = vec!['y', 'm', 'a', 'q'];
+
+    let result = largest(&chars);
+    println!("Наибольший символ - {}", result);
+}
+#+END_SRC
+
+** Не компилируется
+
+#+BEGIN_SRC text
+  error[E0369]: binary operation `>`
+  cannot be applied to type `T`
+    |
+  5 |         if item > largest {
+    |            ^^^^
+    |
+  note: an implementation of
+  `std::cmp::PartialOrd` might be missing for `T`
+#+END_SRC
+
+* Использование обобщённых типов в определении структур
+
+** Пример с точкой
+
+#+BEGIN_SRC rust
+struct Point<T> {
+    x: T,
+    y: T,
+}
+
+fn main() {
+    let integer = Point { x: 5, y: 10 };
+    let float = Point { x: 1.0, y: 4.0 };
+}
+#+END_SRC
+
+** Поля разного типа не работают
+
+#+BEGIN_SRC rust
+struct Point<T> {
+    x: T,
+    y: T,
+}
+
+fn main() {
+    let wont_work = Point { x: 5, y: 4.0 };
+}
+#+END_SRC
+
+** Ошибка компиляции
+
+#+BEGIN_SRC text
+  error[E0308]: mismatched types
+   -->
+    |
+  7 |     let wont_work = Point { x: 5, y: 4.0 };
+    |                                      ^^^
+              expected integral variable, found
+              floating-point variable
+    |
+    = note: expected type `{integer}`
+    = note:    found type `{float}`
+#+END_SRC
+
+** Обобщаем оба типа
+
+#+BEGIN_SRC rust
+struct Point<T, U> {
+    x: T,
+    y: U,
+}
+
+fn main() {
+    let both_integer = Point { x: 5, y: 10 };
+    let both_float = Point { x: 1.0, y: 4.0 };
+    let integer_and_float = Point { x: 5, y: 4.0 };
+}
+#+END_SRC
+
+* Использование обобщённых типов в определении перечислений
+
+** Option<T>
+
+#+BEGIN_SRC rust
+enum Option<T> {
+    Some(T),
+    None,
+}
+#+END_SRC
+
+** Result<T, E>
+
+#+BEGIN_SRC rust
+enum Result<T, E> {
+    Ok(T),
+    Err(E),
+}
+#+END_SRC
+
+* Использование обобщённых типов в определении методов
+
+** Возвращаем поле x
+
+#+BEGIN_SRC rust
+struct Point<T> {
+    x: T,
+    y: T,
+}
+impl<T> Point<T> {
+    fn x(&self) -> &T {
+        &self.x
+    }
+}
+fn main() {
+    let p = Point { x: 5, y: 10 };
+    println!("p.x = {}", p.x());
+}
+#+END_SRC
+
+** Смешиваем разные обобщённые типы (1)
+
+#+BEGIN_SRC rust
+struct Point<T, U> {
+    x: T,
+    y: U,
+}
+impl<T, U> Point<T, U> {
+    fn mixup<V, W>(self, other: Point<V, W>) -> Point<T, W> {
+        Point {
+            x: self.x,
+            y: other.y,
+        }
+    }
+}
+#+END_SRC
+
+** Смешиваем разные обобщённые типы (2)
+#+BEGIN_SRC rust
+fn main() {
+    let p1 = Point { x: 5, y: 10.4 };
+    let p2 = Point { x: "Hello", y: 'c'};
+    let p3 = p1.mixup(p2);
+    println!("p3.x = {}, p3.y = {}", p3.x, p3.y);
+}
+#+END_SRC
+
+* Производительность обобщённого кода
+
+** Мономорфизация
+
+#+BEGIN_SRC rust
+let integer = Some(5);
+let float = Some(5.0);
+#+END_SRC
+
+** Результат примерно такой
+
+#+BEGIN_SRC rust
+enum Option_i32 {
+    Some(i32),
+    None,
+}
+enum Option_f64 {
+    Some(f64),
+    None,
+}
+fn main() {
+    let integer = Option_i32::Some(5);
+    let float = Option_f64::Some(5.0);
+}
+#+END_SRC
+
+* Типажи: определяем общее поведение
+
+* Определение типажа
+
+** Нечто, о чём можно дать сводку
+
+#+BEGIN_SRC rust
+pub trait Summarizable {
+    fn summary(&self) -> String;
+}
+#+END_SRC
+
+* Реализация типажа на типе
+
+** Статья
+
+#+BEGIN_SRC rust
+  pub struct NewsArticle {
+      pub headline: String,
+      pub location: String,
+      pub author: String,
+      pub content: String,
+  }
+  impl Summarizable for NewsArticle {
+      fn summary(&self) -> String {
+          format!(
+              "{}, автор {} ({})",
+              self.headline, self.author,
+              self.location)
+      }
+  }
+#+END_SRC
+
+** Твит
+
+#+BEGIN_SRC rust
+  pub struct Tweet {
+      pub username: String,
+      pub content: String,
+      pub reply: bool,
+      pub retweet: bool,
+  }
+
+  impl Summarizable for Tweet {
+      fn summary(&self) -> String {
+          format!("{}: {}",
+                  self.username, self.content)
+      }
+  }
+#+END_SRC
+
+** Как вызвать обобщённый метод
+
+#+BEGIN_SRC rust
+  let tweet = Tweet {
+      username: String::from("horse_ebooks"),
+      content: String::from(
+          "тра-та-та"),
+      reply: false,
+      retweet: false,
+  };
+
+  println!("1 новый твит: {}", tweet.summary());
+#+END_SRC
+
+** Импорт и реализация чужого типажа
+
+#+BEGIN_SRC rust
+  extern crate aggregator;
+  use aggregator::Summarizable;
+  struct WeatherForecast {
+      ...
+  }
+  impl Summarizable for WeatherForecast {
+      fn summary(&self) -> String {
+          format!(
+              "Температура от {} до {}. Шанс осадков {}%.",
+              self.low_temp, self.high_temp,
+              self.chance_of_precipitation)
+      }
+  }
+#+END_SRC
+
+* Реализация по умолчанию
+
+** Для всех, кто не реализует
+
+#+BEGIN_SRC rust
+pub trait Summarizable {
+    fn summary(&self) -> String {
+        String::from("(Читать дальше...)")
+    }
+}
+#+END_SRC
+
+** Реализация реализации по умолчанию
+
+#+BEGIN_SRC rust
+impl Summarizable for NewsArticle {}
+#+END_SRC
+
+** Можем вызывать такой метод как обычно
+
+#+BEGIN_SRC rust
+  let article = NewsArticle {
+      ...
+  };
+
+  println!("Новая статья! {}", article.summary());
+
+#+END_SRC
+
+** Summarizable с двумя методами
+
+#+BEGIN_SRC rust
+  pub trait Summarizable {
+      fn author_summary(&self) -> String;
+
+      fn summary(&self) -> String {
+          format!(
+              "(Читать дальше от {}...)",
+              self.author_summary())
+      }
+  }
+#+END_SRC
+
+** Реализация
+
+#+BEGIN_SRC rust
+impl Summarizable for Tweet {
+    fn author_summary(&self) -> String {
+        format!("@{}", self.username)
+    }
+}
+#+END_SRC
+
+** Вызываем как обычно
+
+#+BEGIN_SRC rust
+  let tweet = Tweet {
+      username: String::from("horse_ebooks"),
+      ...
+  };
+
+  println !("1 новый твит: {}", tweet.summary());
+#+END_SRC
+
+* Домашнее задание
+
+** Домашнее задание
+
+- Прочитать из файла массив целых чисел. Каждое число на своей строке. Посчитать
+  число повторений каждого встреченного числа, вывести на экран.
+- Прочитать из файла массив трёхмерных точек. Каждая точка на своей строке.
+  Компоненты - положительные числа с плавающей точкой, разделены пробелом.
+  Вывести все точки на экран.
+- Прочитать из файла массив трёхмерных векторов и попарно сложить текущий со
+  следующим. Формат - такой же, как в предыдущем задании. Результат записать в
+  другой файл.
+
+* Спасибо
