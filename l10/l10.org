@@ -494,17 +494,444 @@ impl Summarizable for Tweet {
   println !("1 новый твит: {}", tweet.summary());
 #+END_SRC
 
+* Ограничения типажей
+
+** Обобщённая функция
+
+#+BEGIN_SRC rust
+pub fn notify<T: Summarizable>(item: T) {
+    println!("Breaking news! {}", item.summary());
+}
+#+END_SRC
+
+** Длинная сигнатура
+
+#+BEGIN_SRC rust
+  fn some_function<T: Display + Clone,
+                   U: Clone + Debug>(
+      t: T, u: U) -> i32 {
+#+END_SRC
+
+** where
+
+#+BEGIN_SRC rust
+fn some_function<T, U>(t: T, u: U) -> i32
+    where T: Display + Clone,
+          U: Clone + Debug
+{
+#+END_SRC
+
+* Чиним функцию largest
+
+** Не компилируется
+
+#+BEGIN_SRC text
+  error[E0369]: binary operation `>`
+  cannot be applied to type `T`
+    |
+  5 |         if item > largest {
+    |            ^^^^
+    |
+  note: an implementation of
+  `std::cmp::PartialOrd` might be missing for `T`
+#+END_SRC
+
+** Меняем сигнатуру
+
+#+BEGIN_SRC rust
+fn largest<T: PartialOrd>(list: &[T]) -> T {
+#+END_SRC
+
+** Новые ошибки (1)
+
+#+BEGIN_SRC text
+  error[E0508]: cannot move out of type `[T]`,
+  a non-copy array
+   --> src/main.rs:4:23
+    |
+  4 |     let mut largest = list[0];
+    |         -----------   ^^^^^^^
+    |       cannot move out of here
+    |         |
+    |         hint: to prevent move, use
+    |  `ref largest` or `ref mut largest`
+
+#+END_SRC
+
+** Новые ошибки (2)
+
+#+BEGIN_SRC text
+  error[E0507]: cannot move out of borrowed content
+   --> src/main.rs:6:9
+    |
+  6 |     for &item in list.iter() {
+    |         ^----
+    |         ||
+    |         |hint: to prevent move, use
+    |         `ref item` or `ref mut item`
+    |         cannot move out of borrowed content
+#+END_SRC
+
+** largest для Copy-типов
+
+#+BEGIN_SRC rust
+fn largest<T: PartialOrd + Copy>(list: &[T]) -> T {
+    let mut largest = list[0];
+
+    for &item in list.iter() {
+        if item > largest {
+            largest = item;
+        }
+    }
+
+    largest
+}
+
+#+END_SRC
+
+* Проверка ссылок с помощью времён жизни
+
+* Времена жизни предотвращают висячие ссылки
+
+** Попытка использовать мёртвое значение
+
+#+BEGIN_SRC rust
+{
+    let r;
+
+    {
+        let x = 5;
+        r = &x;
+    }
+
+    println!("r: {}", r);
+}
+#+END_SRC
+
+** Не компилируется
+
+#+BEGIN_SRC text
+  error: `x` does not live long enough
+     |
+  6  |         r = &x;
+     |              - borrow occurs here
+  7  |     }
+     |     ^ `x` dropped here while still borrowed
+  ...
+  10 | }
+     | - borrowed value needs to live until here
+
+#+END_SRC
+
+* Анализатор заимствований
+
+** Пример с аннотациями
+
+#+BEGIN_SRC rust
+{
+    let r;         // -------+-- 'a
+                   //        |
+    {              //        |
+        let x = 5; // -+-----+-- 'b
+        r = &x;    //  |     |
+    }              // -+     |
+                   //        |
+    println!("r: {}", r); // |
+                   //        |
+                   // -------+
+}
+#+END_SRC
+
+** Пример без висячих ссылок
+
+#+BEGIN_SRC rust
+{
+    let x = 5;            // -----+-- 'b
+                          //      |
+    let r = &x;           // --+--+-- 'a
+                          //   |  |
+    println!("r: {}", r); //   |  |
+                          // --+  |
+}                         // -----+
+
+#+END_SRC
+
+* Обобщённые времена жизни в функциях
+
+** longest
+
+#+BEGIN_SRC rust
+fn main() {
+    let string1 = String::from("abcd");
+    let string2 = "xyz";
+
+    let result = longest(string1.as_str(), string2);
+    println!("The longest string is {}", result);
+}
+#+END_SRC
+
+** Реализация longest
+
+#+BEGIN_SRC rust
+fn longest(x: &str, y: &str) -> &str {
+    if x.len() > y.len() {
+        x
+    } else {
+        y
+    }
+}
+#+END_SRC
+
+** Ошибка
+
+#+BEGIN_SRC rust
+  error[E0106]: missing lifetime specifier
+     |
+  1  | fn longest(x: &str, y: &str) -> &str {
+     |                                 ^
+     |       expected lifetime parameter
+     |
+     = help: this function's return type contains
+     a borrowed value, but the
+     signature does not say whether it is borrowed
+     from `x` or `y`
+#+END_SRC
+
+* Синтаксис аннотации времени жизни
+
+** Пример
+
+#+BEGIN_SRC rust
+&i32        // ссылка
+&'a i32     // ссылка с явным ВЖ
+&'a mut i32 // изменяемая ссылка с явным ВЖ
+#+END_SRC
+
+* Аннотации ВЖ в определении функции
+
+** longest
+
+#+BEGIN_SRC rust
+fn longest<'a>(x: &'a str, y: &'a str) -> &'a str {
+    if x.len() > y.len() {
+        x
+    } else {
+        y
+    }
+}
+#+END_SRC
+
+** Как отличаются ВЖ (1)
+
+#+BEGIN_SRC rust
+  fn main() {
+      let string1 = String::from(
+          "длинная строка длинна");
+      {
+          let string2 = String::from("xyz");
+          let result = longest(string1.as_str(),
+                               string2.as_str());
+          println!("Самая длинная строка - {}",
+                   result);
+      }
+  }
+#+END_SRC
+
+** Как отличаются ВЖ (2)
+
+#+BEGIN_SRC rust
+  fn main() {
+      let string1 = String::from(
+          "длинная строка длинна");
+      {
+          let string2 = String::from("xyz");
+          let result = longest(string1.as_str(),
+                               string2.as_str());
+      }
+      println!("Самая длинная строка - {}",
+               result);
+  }
+#+END_SRC
+
+** Ошибка анализатора заимствования
+
+#+BEGIN_SRC rust
+  error: `string2` does not live long enough
+     |
+  6  |         result = longest(string1.as_str(),
+     |                          string2.as_str());
+     |                          - borrow occurs here
+  7  |     }
+     |     ^ `string2` dropped here
+     |        while still borrowed
+  8  |     println!("The longest string is {}",
+     |              result);
+  9  | }
+     | - borrowed value needs to live until here
+#+END_SRC
+
+* Думаем о ВЖ
+
+** longest с одним ВЖ
+
+#+BEGIN_SRC rust
+fn longest<'a>(x: &'a str, y: &str) -> &'a str {
+    x
+}
+#+END_SRC
+
+** longest с висячей ссылкой
+
+#+BEGIN_SRC rust
+fn longest<'a>(x: &str, y: &str) -> &'a str {
+    let result = String::from("длинная строка");
+    result.as_str()
+}
+#+END_SRC
+
+** Ошибка
+
+#+BEGIN_SRC text
+  error: `result` does not live long enough
+    |
+  3 |     result.as_str()
+    |     ^^^^^^ does not live long enough
+  4 | }
+    | - borrowed value only lives until here
+    |
+  note: borrowed value must be valid for the
+  lifetime 'a as defined on the block at 1:44...
+    |
+  1 | fn longest<'a>(x: &str, y: &str) -> &'a str {
+    |
+#+END_SRC
+
+* Аннотации ВЖ в определении структур
+
+** Пример
+
+#+BEGIN_SRC rust
+  struct ImportantExcerpt<'a> {
+      part: &'a str,
+  }
+
+  fn main() {
+      let novel = String::from(
+          "Call me Ishmael. Some years ago...");
+      let first_sentence = novel.split('.')
+          .next()
+          .expect("Could not find a '.'");
+      let i = ImportantExcerpt {
+          part: first_sentence
+      };
+  }
+#+END_SRC
+
+* Опускание ВЖ
+
+** Пример без явных ВЖ
+
+#+BEGIN_SRC rust
+fn first_word(s: &str) -> &str {
+    let bytes = s.as_bytes();
+
+    for (i, &item) in bytes.iter().enumerate() {
+        if item == b' ' {
+            return &s[0..i];
+        }
+    }
+
+    &s[..]
+}
+#+END_SRC
+
+** Раскрывается в
+
+#+BEGIN_SRC rust
+fn first_word<'a>(s: &'a str) -> &'a str {
+#+END_SRC
+
+* Правила опускания ВЖ
+
+** 1
+
+- Каждый параметр--ссылка получает своё ВЖ
+- ~fn foo<'a>(x: &'a i32)~
+- ~fn foo<'a, 'b>(x: &'a i32, y: &'b i32)~
+
+** 2
+
+- Если входное ВЖ только одно, оно присваивается всем выходным ВЖ
+
+** 3
+
+- Если одно из входных ВЖ - ~&self~, оно присваивается всем выходным ВЖ
+
+* Аннотации ВЖ в определении методов
+
+** Пример
+
+#+BEGIN_SRC rust
+impl<'a> ImportantExcerpt<'a> {
+    fn level(&self) -> i32 {
+        3
+    }
+}
+#+END_SRC
+
+** Пример с опусканием
+
+#+BEGIN_SRC rust
+  impl<'a> ImportantExcerpt<'a> {
+      fn announce_and_return_part(
+          &self, announcement: &str) -> &str
+      {
+          println!("Attention please: {}",
+                   announcement);
+          self.part
+      }
+  }
+#+END_SRC
+
+* Статическое время жизни
+
+** Пример
+
+#+BEGIN_SRC rust
+let s: &'static str = "У меня статическое ВЖ.";
+#+END_SRC
+
+* Обобщённые типы, ограничения типажей и ВЖ вместе
+
+** Пример
+
+#+BEGIN_SRC rust
+  use std::fmt::Display;
+
+  fn longest_with_an_announcement<'a, T>(
+      x: &'a str, y: &'a str, ann: T) -> &'a str
+      where T: Display
+  {
+      println!("Announcement! {}", ann);
+      if x.len() > y.len() {
+          x
+      } else {
+          y
+      }
+  }
+#+END_SRC
+
 * Домашнее задание
 
 ** Домашнее задание
 
-- Прочитать из файла массив целых чисел. Каждое число на своей строке. Посчитать
-  число повторений каждого встреченного числа, вывести на экран.
-- Прочитать из файла массив трёхмерных точек. Каждая точка на своей строке.
-  Компоненты - положительные числа с плавающей точкой, разделены пробелом.
-  Вывести все точки на экран.
-- Прочитать из файла массив трёхмерных векторов и попарно сложить текущий со
-  следующим. Формат - такой же, как в предыдущем задании. Результат записать в
-  другой файл.
+- Определить структуру трёхмерного вектора, у которого каждый компонент может
+  быть любого численного типа
+- Определить на ней методы
+  - установки определённого компонента
+  - сравнения с другим по длине
+- Определить такой метод сложения векторов, чтобы он возвращал структуру,
+  ссылающуюся на операнды
+- Определить на этой структуре метод распечатывания
 
 * Спасибо
