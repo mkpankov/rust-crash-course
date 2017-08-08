@@ -1,0 +1,422 @@
+#+TITLE: Rust №13. Подробнее о Cargo и crates.io
+#+AUTHOR: Панков Михаил
+#+DATE: Февраль 2017
+#+EMAIL: work@michaelpankov.com
+#+LANGUAGE: ru
+#+CATEGORY: task
+#+OPTIONS:   H:2 num:t toc:nil \n:nil @:t ::t |:t ^:t -:t f:t *:t <:t
+#+OPTIONS:   TeX:t LaTeX:t skip:nil d:nil todo:t pri:nil tags:not-in-toc
+#+INFOJS_OPT: view:nil toc:nil ltoc:t mouse:underline buttons:0 path:http://orgmode.org/org-info.js
+#+EXPORT_SELECT_TAGS: export
+#+EXPORT_EXCLUDE_TAGS: noexport
+#+LINK_UP:
+#+LINK_HOME:
+#+startup: beamer
+#+LaTeX_CLASS: beamer
+# +LaTeX_CLASS_OPTIONS: [notes]
+#+COLUMNS: %40ITEM %10BEAMER_env(Env) %9BEAMER_envargs(Env Args) %4BEAMER_col(Col) %10BEAMER_extra(Extra)
+#+latex_header: \usepackage[english,russian]{babel}
+#+latex_header: \mode<beamer>{\usetheme{metropolis}}
+
+* Обзор
+
+** Обзор
+
+- Настройка сборки с помощью профилей
+
+- Публикация библиотек на crates.io
+
+- Организация больших проектов с помощью workspace
+
+- Установка программ с crates.io
+
+- Расширение cargo своими подкомандами
+
+* Профили сборки
+
+** Мы уже видели 2 профиля
+
+#+BEGIN_SRC
+$ cargo build
+    Finished dev [unoptimized + debuginfo] target(s) in 0.0 secs
+$ cargo build --release
+    Finished release [optimized] target(s) in 0.0 secs
+#+END_SRC
+
+** Профили из коробки
+
+- dev: используется cargo build
+- release: используется cargo build --release
+- test: используется cargo test
+- doc: используется cargo doc
+
+** Настройка профилей
+
+=Cargo.toml=:
+
+#+BEGIN_SRC toml
+[profile.dev]
+opt-level = 0
+
+[profile.release]
+opt-level = 3
+#+END_SRC
+
+** Подробности
+
+http://doc.crates.io/manifest.html#the-profile-sections
+
+* Публикация контейнера на crates.io
+
+* Документация
+
+** Документирующие комментарии
+
+=src/lib.rs=:
+
+#+BEGIN_SRC rust
+/// Прибавляет один к данному числу
+///
+/// # Examples
+///
+/// ```
+/// let five = 5;
+///
+/// assert_eq!(6, add_one(five));
+/// ```
+pub fn add_one(x: i32) -> i32 {
+    x + 1
+}
+#+END_SRC
+
+** Полученная документация
+
+=cargo doc --open=
+
+** Примеры из документации компилируются и запускаются!
+
+=$ cargo test=
+
+#+BEGIN_SRC
+   Doc-tests add-one
+
+running 1 test
+test add_one_0 ... ok
+
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured
+#+END_SRC
+
+** Документация к модулям
+
+#+BEGIN_SRC rust
+//! # The Rust Standard Library
+//!
+//! The Rust Standard Library provides the essential runtime
+//! functionality for building portable Rust software.
+#+END_SRC
+
+* Экспорт удобного API с помощью pub use
+
+** Пример: реализация (1)
+
+=src/lib.rs=:
+
+#+BEGIN_SRC
+//! # Art
+//!
+//! A library for modeling artistic concepts.
+pub mod kinds {
+    /// The primary colors according to the RYB color model.
+    pub enum PrimaryColor {
+        Red,
+        Yellow,
+        Blue,
+    }
+    /// The secondary colors according to the RYB color model.
+    pub enum SecondaryColor {
+        Orange,
+        ...
+#+END_SRC
+
+** Пример: реализация (2)
+
+#+BEGIN_SRC
+pub mod utils {
+    use kinds::*;
+
+    /// Combines two primary colors in equal amounts to create
+    /// a secondary color.
+    pub fn mix(c1: PrimaryColor, c2: PrimaryColor) -> SecondaryColor {
+        // ...snip...
+    }
+}
+#+END_SRC
+
+** Пример: использование
+
+=src/main.rs=:
+
+#+BEGIN_SRC
+extern crate art;
+
+use art::kinds::PrimaryColor;
+use art::utils::mix;
+
+fn main() {
+    let red = PrimaryColor::Red;
+    let yellow = PrimaryColor::Yellow;
+    mix(red, yellow);
+}
+#+END_SRC
+
+** Пример: реээкспорты
+
+=src/lib.rs=:
+
+#+BEGIN_SRC
+//! # Art
+//!
+//! A library for modeling artistic concepts.
+
+pub use kinds::PrimaryColor;
+pub use kinds::SecondaryColor;
+pub use utils::mix;
+
+pub mod kinds {
+    // ...
+#+END_SRC
+
+** Пример: использование с реээкспортами
+
+=src/main.rs=:
+
+#+BEGIN_SRC rust
+extern crate art;
+
+use art::PrimaryColor;
+use art::mix;
+
+fn main() {
+    // ...
+}
+#+END_SRC
+
+* Публикация контейнера
+
+* Перед первой публикацией
+
+** Перед первой публикацией
+
+- https://crates.io/
+
+- =cargo login abcdefghijklmnopqrstuvwxyz012345=
+
+* Перед публикацией нового контейнера
+
+** Публикация простейшего контейнера
+
+#+BEGIN_SRC
+$ cargo publish
+Updating registry
+`https://github.com/rust-lang/crates.io-index`
+warning: manifest has no description, license,
+license-file, documentation, homepage or
+repository.
+...
+error: api errors: missing or
+empty metadata fields: description, license.
+Please see
+http://doc.crates.io/manifest.html#package-metadata
+for how to upload metadata
+#+END_SRC
+
+** Подходящий Cargo.toml
+
+#+BEGIN_SRC toml
+[package]
+name = "guessing_game"
+version = "0.1.0"
+authors = ["Your Name <you@example.com>"]
+description = "A fun game where you guess what ..."
+license = "MIT/Apache-2.0"
+
+[dependencies]
+#+END_SRC
+
+** Публикация на crates.io
+
+- Публикация - это навсегда
+
+#+BEGIN_SRC
+$ cargo publish
+ Updating registry `https://github.com/rust-lang/crates.io-index`
+Packaging guessing_game v0.1.0 (file:///projects/guessing_game)
+Verifying guessing_game v0.1.0 (file:///projects/guessing_game)
+Compiling guessing_game v0.1.0
+(file:///projects/guessing_game/target/package/guessing_game-0.1.0)
+ Finished dev [unoptimized + debuginfo] target(s) in 0.19 secs
+Uploading guessing_game v0.1.0 (file:///projects/guessing_game)
+#+END_SRC
+
+
+* Публикация новой версии
+
+** Публикация новой версии
+
+- semver
+- Поле =version= в =Cargo.toml=
+
+* Удаление версий с crates.io с помощью cargo yank
+
+** Удаление версий с crates.io с помощью cargo yank
+
+#+BEGIN_SRC bash
+$ cargo yank --vers 1.0.1
+$ cargo yank --vers 1.0.1 --undo
+#+END_SRC
+
+* Cargo Workspaces
+
+** Создаём проект
+
+#+BEGIN_SRC bash
+$ cargo new --bin adder
+     Created binary (application) `adder` project
+$ cd adder
+#+END_SRC
+
+=Cargo.toml=:
+
+=[workspace]=
+
+** Добавляем зависимость
+
+=Cargo.toml=:
+
+#+BEGIN_SRC
+[dependencies]
+add-one = { path = "add-one" }
+#+END_SRC
+
+** Создаём библиотеку
+
+#+BEGIN_SRC
+$ cargo new add-one
+     Created library `add-one` project
+#+END_SRC
+
+** Структура файлов
+
+#+BEGIN_SRC
+├── Cargo.toml
+├── add-one
+│   ├── Cargo.toml
+│   └── src
+│       └── lib.rs
+└── src
+    └── main.rs
+#+END_SRC
+
+** Добавляем функцию
+
+=add-one/src/lib.rs=:
+
+#+BEGIN_SRC rust
+pub fn add_one(x: i32) -> i32 {
+    x + 1
+}
+#+END_SRC
+
+** Пишем код программы
+
+=src/main.rs=:
+
+#+BEGIN_SRC rust
+  extern crate add_one;
+
+  fn main() {
+      let num = 10;
+      println!("Hello, world! {} plus one is {}!",
+               num, add_one::add_one(num));
+  }
+#+END_SRC
+
+** Собираем
+
+#+BEGIN_SRC
+$ cargo build
+   Compiling add-one v0.1.0 (file:///projects/adder/add-one)
+   Compiling adder v0.1.0 (file:///projects/adder)
+    Finished dev [unoptimized + debuginfo] target(s) in 0.68 secs
+#+END_SRC
+
+** Добавляем зависимость в библиотеке
+
+=add-one/Cargo.toml=:
+
+#+BEGIN_SRC
+[dependencies]
+
+rand = "0.3.14"
+#+END_SRC
+
+=add-one/src/lib.rs=:
+
+=extern crate rand;=
+
+** Собираем
+
+#+BEGIN_SRC
+$ cargo build
+    Updating registry `https://github.com/rust-lang/crates.io-index`
+ Downloading rand v0.3.14
+   ...snip...
+   Compiling rand v0.3.14
+   Compiling add-one v0.1.0 (file:///projects/adder/add-one)
+   Compiling adder v0.1.0 (file:///projects/adder)
+    Finished dev [unoptimized + debuginfo] target(s) in 10.18 secs
+#+END_SRC
+
+** Пишем тест
+
+=add-one/src/lib.rs=:
+
+#+BEGIN_SRC rust
+pub fn add_one(x: i32) -> i32 {
+    x + 1
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn it_works() {
+        assert_eq!(3, add_one(2));
+    }
+}
+#+END_SRC
+
+** Запускаем тест
+
+#+BEGIN_SRC
+$ cargo test -p add-one
+    Finished dev [unoptimized + debuginfo] target(s) in 0.0 secs
+     Running target/debug/deps/add_one-abcabcabc
+running 1 test
+test tests::it_works ... ok
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured
+   Doc-tests add-one
+running 0 tests
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured
+#+END_SRC
+
+* Домашнее задание
+
+** Домашнее задание
+
+- Изучить настройки профилей cargo по умолчанию
+
+  http://doc.crates.io/manifest.html#the-profile-sections
+
+* Спасибо
