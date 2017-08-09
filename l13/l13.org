@@ -411,6 +411,27 @@ running 0 tests
 test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured
 #+END_SRC
 
+* Установка приложений с crates.io
+
+** cargo install
+
+#+BEGIN_SRC
+$ cargo install ripgrep
+Updating registry `https://github.com/rust-lang/crates.io-index`
+ Downloading ripgrep v0.3.2
+ ...
+   Compiling ripgrep v0.3.2
+    Finished release [optimized + debuginfo] target(s) in 97.91 secs
+  Installing ~/.cargo/bin/rg
+#+END_SRC
+
+* Подкоманды cargo
+
+** cargo-something
+
+- =cargo install cargo-something=
+- =cargo something ...=
+
 * Домашнее задание
 
 ** Домашнее задание
