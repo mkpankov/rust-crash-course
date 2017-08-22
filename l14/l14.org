@@ -1,0 +1,388 @@
+#+TITLE: Rust №14. Умные указатели
+#+AUTHOR: Панков Михаил
+#+DATE: Февраль 2017
+#+EMAIL: work@michaelpankov.com
+#+LANGUAGE: ru
+#+CATEGORY: task
+#+OPTIONS:   H:2 num:t toc:nil \n:nil @:t ::t |:t ^:t -:t f:t *:t <:t
+#+OPTIONS:   TeX:t LaTeX:t skip:nil d:nil todo:t pri:nil tags:not-in-toc
+#+INFOJS_OPT: view:nil toc:nil ltoc:t mouse:underline buttons:0 path:http://orgmode.org/org-info.js
+#+EXPORT_SELECT_TAGS: export
+#+EXPORT_EXCLUDE_TAGS: noexport
+#+LINK_UP:
+#+LINK_HOME:
+#+startup: beamer
+#+LaTeX_CLASS: beamer
+# +LaTeX_CLASS_OPTIONS: [notes]
+#+COLUMNS: %40ITEM %10BEAMER_env(Env) %9BEAMER_envargs(Env Args) %4BEAMER_col(Col) %10BEAMER_extra(Extra)
+#+latex_header: \usepackage[english,russian]{babel}
+#+latex_header: \mode<beamer>{\usetheme{metropolis}}
+
+* Обзор
+
+** Обзор
+
+- Умные указатели владеют данными
+
+- =Deref= и =Drop=
+
+- =Box<T>=, =Rc<T>=, =RefCell<T>=
+
+- Внутренняя изменяемость
+
+- Циклы ссылок
+
+* Box<T>
+
+** Хранит данные в куче и имеет определённый размер
+
+Файл: =src/main.rs=
+
+#+BEGIN_SRC rust
+fn main() {
+    let b = Box::new(5);
+    println!("b = {}", b);
+}
+#+END_SRC
+
+** Cons list
+
+Файл: =src/main.rs=
+
+#+BEGIN_SRC rust
+enum List {
+    Cons(i32, List),
+    Nil,
+}
+#+END_SRC
+
+** Использование Cons list
+
+Файл: =src/main.rs=
+
+#+BEGIN_SRC rust
+use List::{Cons, Nil};
+
+fn main() {
+    let list = Cons(1, Cons(2, Cons(3, Nil)));
+}
+#+END_SRC
+
+** Ошибка в Cons list
+
+#+BEGIN_SRC text
+error[E0072]: recursive type `List` has infinite
+size -->
+  |
+1 | enum List {
+  | ^^^^^^^^^ recursive type has infinite size
+2 | Cons(i32, List),
+  |     --------------- recursive without indirection
+  |
+  = help: insert indirection (e.g., a `Box`, `Rc`,
+  or `&`) at some point to make `List`
+  representable
+#+END_SRC
+
+** Бесконечность
+
+[[file:pics/cons.png][file:~/org/courses/kl-001/l14/pics/cons.png]]
+
+** Компилятор подсказывает
+
+#+BEGIN_SRC text
+= help: insert indirection (e.g., a `Box`, `Rc`,
+        or `&`) at some point to make `List`
+        representable
+#+END_SRC
+
+** Cons list с коробками
+
+Файл: =src/main.rs=
+
+#+BEGIN_SRC rust
+enum List {
+    Cons(i32, Box<List>),
+    Nil,
+}
+
+use List::{Cons, Nil};
+
+fn main() {
+    let list = Cons(1,
+        Box::new(Cons(2,
+            Box::new(Cons(3,
+                Box::new(Nil))))));
+}
+#+END_SRC
+
+** Не бесконечность
+
+***                                                          :B_column:BMCOL:
+    :PROPERTIES:
+    :BEAMER_col: 0.5
+    :BEAMER_env: column
+    :END:
+
+[[file:pics/cons-box.png][    file:~/org/courses/kl-001/l14/pics/cons-box.png]]
+
+* Типаж Deref
+
+** Позволяет обратиться к данным по ссылке
+
+#+BEGIN_SRC rust
+let mut x = 5;
+{
+    let y = &mut x;
+
+    *y += 1
+}
+
+assert_eq!(6, x);
+#+END_SRC
+
+** Пример с MP3 (1)
+
+#+BEGIN_SRC rust
+use std::ops::Deref;
+
+struct Mp3 {
+    audio: Vec<u8>,
+    artist: Option<String>,
+    title: Option<String>,
+}
+
+impl Deref for Mp3 {
+    type Target = Vec<u8>;
+    fn deref(&self) -> &Vec<u8> {
+        &self.audio
+    }
+}
+#+END_SRC
+
+** Пример с MP3 (2)
+
+#+BEGIN_SRC rust
+  fn main() {
+      let my_favorite_song = Mp3 {
+          audio: vec![1, 2, 3],
+          artist: Some(String::from("Nirvana")),
+          title: Some(String::from(
+              "Smells Like Teen Spirit")),
+      };
+
+      assert_eq!(vec![1, 2, 3], *my_favorite_song);
+  }
+#+END_SRC
+
+* Неявные преобразования с Deref в функциях и методах
+
+** Без Deref coercion
+
+#+BEGIN_SRC rust
+  fn compress_mp3(audio: &[u8]) -> Vec<u8> {
+      ...
+  }
+
+  let result =
+      compress_mp3(my_favorite_song.audio.as_slice());
+#+END_SRC
+
+** С Deref coercion
+
+#+BEGIN_SRC rust
+fn compress_mp3(audio: &[u8]) -> Vec<u8> {
+    ...
+}
+
+let result = compress_mp3(&my_favorite_song);
+#+END_SRC
+
+** Что происходит
+
+=&Mp3 -> &Vec<u8> -> &[u8]=
+
+** DerefMut
+
+- Перегрузка =*= на =&mut=
+
+** Правила
+
+- &T в &U когда T: Deref<Target=U>.
+- &mut T в &mut U когда T: DerefMut<Target=U>.
+- &mut T в &U когда T: Deref<Target=U>.
+
+* Типаж Drop
+
+** Выполнение кода при освобождении ресурсов
+
+#+BEGIN_SRC rust
+  struct CustomSmartPointer {
+      data: String,
+  }
+  impl Drop for CustomSmartPointer {
+      fn drop(&mut self) {
+          println!("Dropping CustomSmartPointer!");
+      }
+  }
+  fn main() {
+      let c = CustomSmartPointer {
+          data: String::from("some data")
+      };
+      println!("CustomSmartPointer created.");
+      println!("Wait for it...");
+  }
+#+END_SRC
+
+** Вывод
+
+#+BEGIN_SRC text
+CustomSmartPointer created.
+Wait for it...
+Dropping CustomSmartPointer!
+#+END_SRC
+
+** Ранний сброс
+
+#+BEGIN_SRC rust
+  fn main() {
+      let c = CustomSmartPointer {
+          data: String::from("some data")
+      };
+      println!("CustomSmartPointer created.");
+      drop(c);
+      println!("Wait for it...");
+  }
+#+END_SRC
+
+** Вывод
+
+#+BEGIN_SRC text
+CustomSmartPointer created.
+Dropping CustomSmartPointer!
+Wait for it...
+#+END_SRC
+
+** Сброс через метод
+
+- =c.drop()= делать нельзя
+
+** std::mem::drop
+
+#+BEGIN_SRC rust
+pub mod std {
+    pub mod mem {
+        pub fn drop<T>(x: T) { }
+    }
+}
+#+END_SRC
+
+* Rc<T>
+
+** Счётчик ссылок
+
+- Телевизор в гостиной
+
+** Пример со списками
+***                                                          :B_column:BMCOL:
+    :PROPERTIES:
+    :BEAMER_col: 1.4
+    :BEAMER_env: column
+    :END:
+
+[[file:pics/rc.png][    file:~/org/courses/kl-001/l14/pics/rc.png]]
+
+** С Box не работает
+
+#+BEGIN_SRC rust
+enum List {
+    Cons(i32, Box<List>),
+    Nil,
+}
+use List::{Cons, Nil};
+fn main() {
+    let a = Cons(5,
+        Box::new(Cons(10,
+            Box::new(Nil))));
+    let b = Cons(3, Box::new(a));
+    let c = Cons(4, Box::new(a));
+}
+#+END_SRC
+
+** Не компилируется
+
+#+BEGIN_SRC text
+error[E0382]: use of moved value: `a` -->
+src/main.rs:13:30
+   |
+12 | let b = Cons(3, Box::new(a));
+   |                              - value moved here
+13 | let c = Cons(4, Box::new(a));
+   |                              ^ value used here after
+   |                                move
+   = note: move occurs because `a` has type
+   `List`, which does not implement the `Copy`
+   trait
+#+END_SRC
+
+** С Rc работает
+
+#+BEGIN_SRC rust
+  enum List {
+      Cons(i32, Rc<List>),
+      Nil,
+  }
+  use List::{Cons, Nil};
+  use std::rc::Rc;
+  fn main() {
+      let a = Rc::new(Cons(5, Rc::new(
+          Cons(10, Rc::new(Nil)))));
+      let b = Cons(3, a.clone());
+      let c = Cons(4, a.clone());
+  }
+#+END_SRC
+
+* Клонирование Rc увеличивает счётчик ссылок
+
+** Код
+
+#+BEGIN_SRC rust
+  fn main() {
+      let a = Rc::new(Cons(5, Rc::new(
+          Cons(10, Rc::new(Nil)))));
+      println!("rc = {}", Rc::strong_count(&a));
+      let b = Cons(3, a.clone());
+      println!("rc after creating b = {}",
+               Rc::strong_count(&a));
+      {
+          let c = Cons(4, a.clone());
+          println!("rc after creating c = {}",
+                   Rc::strong_count(&a));
+      }
+      println!("rc after c goes out of scope = {}",
+               Rc::strong_count(&a));
+  }
+#+END_SRC
+
+** Вывод
+
+#+BEGIN_SRC text
+rc = 1
+rc after creating b = 2
+rc after creating c = 3
+rc after c goes out of scope = 2
+#+END_SRC
+
+** Через Rc нельзя получить несколько ссылок для записи
+
+- Так же, как для обычных ссылок
+
+* Домашнее задание
+
+** Домашнее задание
+
+- Изучить настройки профилей cargo по умолчанию
+
+  http://doc.crates.io/manifest.html#the-profile-sections
+
+* Спасибо
