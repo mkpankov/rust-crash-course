@@ -377,12 +377,187 @@ rc after c goes out of scope = 2
 
 - Так же, как для обычных ссылок
 
-* Домашнее задание
+* RefCell<T>
 
-** Домашнее задание
+** Внутренняя изменяемость
 
-- Изучить настройки профилей cargo по умолчанию
+- В любой момент может быть одно из:
+  - Одна ссылка с правом на изменение
+  - Любое число ссылок на чтение
+- Ссылки должны быть всегда правильными
 
-  http://doc.crates.io/manifest.html#the-profile-sections
+** Статический анализ консервативен
+
+- =RefCell= делает проверки правил заимствования динамически
+- Только для однопоточных программ
+
+** Пример
+
+#+BEGIN_SRC rust
+fn a_fn_that_immutably_borrows(a: &i32) {
+    println!("a is {}", a);
+}
+fn a_fn_that_mutably_borrows(b: &mut i32) {
+    *b += 1;
+}
+fn demo(r: &RefCell<i32>) {
+    a_fn_that_immutably_borrows(&r.borrow());
+    a_fn_that_mutably_borrows(&mut r.borrow_mut());
+    a_fn_that_immutably_borrows(&r.borrow());
+}
+fn main() {
+    let data = RefCell::new(5);
+    demo(&data);
+}
+#+END_SRC
+
+** Вывод
+
+#+BEGIN_SRC rust
+a is 5
+a is 6
+#+END_SRC
+
+** Как работает динамическая проверка (1)
+
+#+BEGIN_SRC rust
+let mut s = String::from("hello");
+
+let r1 = &mut s;
+let r2 = &mut s;
+#+END_SRC
+
+#+BEGIN_SRC text
+error[E0499]: cannot borrow `s` as mutable more than once at a time
+ -->
+  |
+5 |     let r1 = &mut s;
+  |                   - first mutable borrow occurs here
+6 |     let r2 = &mut s;
+  |                   ^ second mutable borrow occurs here
+7 | }
+  | - first borrow ends here
+#+END_SRC
+
+** Как работает динамическая проверка (2)
+
+#+BEGIN_SRC rust
+fn main() {
+    let s = RefCell::new(String::from("hello"));
+
+    let r1 = s.borrow_mut();
+    let r2 = s.borrow_mut();
+}
+#+END_SRC
+
+#+BEGIN_SRC text
+    Finished dev [unoptimized + debuginfo] target(s) in 0.83 secs
+     Running `target/debug/refcell`
+thread 'main' panicked at 'already borrowed: BorrowMutError',
+/stable-dist-rustc/build/src/libcore/result.rs:868
+note: Run with `RUST_BACKTRACE=1` for a backtrace.
+#+END_SRC
+
+* Множественное владение изменяемыми данными
+
+** Пример (1)
+
+#+BEGIN_SRC rust
+#[derive(Debug)]
+enum List {
+    Cons(Rc<RefCell<i32>>, Rc<List>),
+    Nil,
+}
+
+use List::{Cons, Nil};
+use std::rc::Rc;
+use std::cell::RefCell;
+#+END_SRC
+
+** Пример (2)
+
+#+BEGIN_SRC rust
+  fn main() {
+      let value = Rc::new(RefCell::new(5));
+      let a = Cons(value.clone(), Rc::new(Nil));
+      let shared_list = Rc::new(a);
+      let b = Cons(Rc::new(RefCell::new(6)),
+                   shared_list.clone());
+      let c = Cons(Rc::new(RefCell::new(10)),
+                   shared_list.clone());
+      ,*value.borrow_mut() += 10;
+      println!("shared_list after = {:?}", shared_list);
+      println!("b after = {:?}", b);
+      println!("c after = {:?}", c);
+  }
+#+END_SRC
+
+** Вывод
+
+#+BEGIN_SRC text
+shared_list after = Cons(RefCell { value: 15 }, Nil)
+b after = Cons(RefCell { value: 6 },
+          Cons(RefCell { value: 15 }, Nil))
+c after = Cons(RefCell { value: 10 },
+          Cons(RefCell { value: 15 }, Nil))
+#+END_SRC
+
+* Создание циклических ссылок и утечки памяти безопасны
+
+** Пример (1)
+
+#+BEGIN_SRC rust
+#[derive(Debug)]
+enum List {
+    Cons(i32, RefCell<Rc<List>>),
+    Nil,
+}
+
+impl List {
+    fn tail(&self) -> Option<&RefCell<Rc<List>>> {
+        match *self {
+            Cons(_, ref item) => Some(item),
+            Nil => None,
+        }
+    }
+}
+#+END_SRC
+
+** Пример (2)
+
+#+BEGIN_SRC rust
+  fn main() {
+      let a = Rc::new(Cons(5, RefCell::new(Rc::new(Nil))));
+      println!("a initial rc count = {}",
+               Rc::strong_count(&a));
+      println!("a next item = {:?}", a.tail());
+      let b = Rc::new(Cons(10, RefCell::new(a.clone())));
+      println!("a rc count after b creation = {}",
+               Rc::strong_count(&a));
+      println!("b initial rc count = {}",
+               Rc::strong_count(&b));
+      println!("b next item = {:?}", b.tail());
+#+END_SRC
+
+** Пример (3)
+
+#+BEGIN_SRC rust
+
+      if let Some(ref link) = a.tail() {
+          ,*link.borrow_mut() = b.clone();
+      }
+      println!("b rc count after changing a = {}",
+               Rc::strong_count(&b));
+      println!("a rc count after changing a = {}",
+               Rc::strong_count(&a));
+      // Uncomment the next line to see that we have a cycle; it will
+      // overflow the stack
+      // println!("a next item = {:?}", a.tail());
+  }
+#+END_SRC
+
+** Weak<T>
+
+- Предотвращает циклы ссылок
 
 * Спасибо
