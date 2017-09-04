@@ -1,0 +1,364 @@
+#+TITLE: Rust №15. Бесстрашная многопоточность
+#+AUTHOR: Панков Михаил
+#+DATE: Февраль 2017
+#+EMAIL: work@michaelpankov.com
+#+LANGUAGE: ru
+#+CATEGORY: task
+#+OPTIONS:   H:2 num:t toc:nil \n:nil @:t ::t |:t ^:t -:t f:t *:t <:t
+#+OPTIONS:   TeX:t LaTeX:t skip:nil d:nil todo:t pri:nil tags:not-in-toc
+#+INFOJS_OPT: view:nil toc:nil ltoc:t mouse:underline buttons:0 path:http://orgmode.org/org-info.js
+#+EXPORT_SELECT_TAGS: export
+#+EXPORT_EXCLUDE_TAGS: noexport
+#+LINK_UP:
+#+LINK_HOME:
+#+startup: beamer
+#+LaTeX_CLASS: beamer
+# +LaTeX_CLASS_OPTIONS: [notes]
+#+COLUMNS: %40ITEM %10BEAMER_env(Env) %9BEAMER_envargs(Env Args) %4BEAMER_col(Col) %10BEAMER_extra(Extra)
+#+latex_header: \usepackage[english,russian]{babel}
+#+latex_header: \mode<beamer>{\usetheme{metropolis}}
+
+* Обзор
+
+** Обзор
+
+- Как запустить несколько потоков
+
+- Передача сообщений между потоками
+
+- Потоки с общим состоянием
+
+- Типажи =Sync= и =Send=
+
+* Вступление
+
+** Вступление
+
+- 1:1
+- M:N
+- Среда исполнения
+
+* Запуск потоков
+
+** Запуск потоков
+
+#+BEGIN_SRC rust
+use std::thread;
+
+fn main() {
+    thread::spawn(|| {
+        for i in 1..10 {
+            println!("привет {} из запущенного потока!", i);
+        }
+    });
+
+    for i in 1..5 {
+        println!("привет {} из главного потока!", i);
+    }
+}
+#+END_SRC
+
+** Вывод
+
+#+BEGIN_SRC text
+привет 1 из главного потока!
+привет 1 из запущенного потока!
+привет 2 из главного потока!
+привет 2 из запущенного потока!
+привет 3 из главного потока!
+привет 3 из запущенного потока!
+привет 4 из главного потока!
+привет 4 из запущенного потока!
+привет 5 из главного потока!
+привет 5 из запущенного потока!
+#+END_SRC
+
+* Ожидание завершения потоков
+
+** join
+
+#+BEGIN_SRC rust
+  use std::thread;
+
+  fn main() {
+      let handle = thread::spawn(|| {
+          for i in 1..10 {
+              println!("привет {} из запущенного потока!", i);
+          }
+      });
+      for i in 1..5 {
+          println!("привет {} из главного потока!", i);
+      }
+      handle.join();
+  }
+#+END_SRC
+
+** Вывод
+
+#+BEGIN_SRC text
+привет 1 из главного потока!
+привет 1 из запущенного потока!
+...
+привет 6 из запущенного потока!
+привет 7 из запущенного потока!
+привет 8 из запущенного потока!
+привет 9 из запущенного потока!
+#+END_SRC
+
+** Перемещаем join
+
+#+BEGIN_SRC rust
+use std::thread;
+
+fn main() {
+    let handle = thread::spawn(|| {
+        for i in 1..10 {
+            println!("привет {} из запущенного потока!", i);
+        }
+    });
+    handle.join();
+    for i in 1..5 {
+        println!("привет {} из главного потока!", i);
+    }
+}
+#+END_SRC
+
+** Что выведется?
+
+* Использование перемещающих замыканий
+
+** move ||
+
+#+BEGIN_SRC rust
+use std::thread;
+
+fn main() {
+    let v = vec![1, 2, 3];
+
+    let handle = thread::spawn(|| {
+        println!("Вектор: {:?}", v);
+    });
+
+    handle.join();
+}
+#+END_SRC
+
+** Ошибка
+
+#+BEGIN_SRC text
+  error[E0373]: closure may outlive the current
+  function, but it borrows `v`,
+  which is owned by the current function --->
+  6 |     let handle = thread::spawn(|| {
+    |                                ^^
+    |       may outlive borrowed value `v`
+  7 |         println!("Вектор: {:?}", v);
+    |                                  - `v` is
+    |                             borrowed here
+  help: to force the closure to take ownership of
+  `v` (and any other referenced
+  variables), use the `move` keyword, as shown:
+    |     let handle = thread::spawn(move || {
+#+END_SRC
+
+** Чтобы понять эту ошибку...
+
+#+BEGIN_SRC rust
+use std::thread;
+
+fn main() {
+    let v = vec![1, 2, 3];
+
+    let handle = thread::spawn(|| {
+        println!("Вектор: {:?}", v);
+    });
+
+    drop(v); // о нет!
+
+    handle.join();
+}
+#+END_SRC
+
+** Используем move
+
+#+BEGIN_SRC rust
+use std::thread;
+
+fn main() {
+    let v = vec![1, 2, 3];
+
+    let handle = thread::spawn(move || {
+        println!("Вектор: {:?}", v);
+    });
+
+    handle.join();
+}
+#+END_SRC
+
+* Передача сообщений между потоками
+
+** Каналы
+
+#+BEGIN_SRC rust
+use std::sync::mpsc;
+
+fn main() {
+    let (tx, rx) = mpsc::channel();
+}
+#+END_SRC
+
+** Посылаем сообщение
+
+#+BEGIN_SRC rust
+use std::thread;
+use std::sync::mpsc;
+
+fn main() {
+    let (tx, rx) = mpsc::channel();
+
+    thread::spawn(move || {
+        let val = String::from("привет");
+        tx.send(val).unwrap();
+    });
+}
+#+END_SRC
+
+** Получаем сообщение
+
+#+BEGIN_SRC rust
+use std::thread;
+use std::sync::mpsc;
+
+fn main() {
+    let (tx, rx) = mpsc::channel();
+
+    thread::spawn(move || {
+        let val = String::from("привет");
+        tx.send(val).unwrap();
+    });
+
+    let received = rx.recv().unwrap();
+    println!("Получили: {}", received);
+}
+#+END_SRC
+
+** Результат
+
+#+BEGIN_SRC text
+Получили: привет
+#+END_SRC
+
+* Как каналы взаимодействуют с владением
+
+** Пример
+
+#+BEGIN_SRC rust
+use std::thread;
+use std::sync::mpsc;
+
+fn main() {
+    let (tx, rx) = mpsc::channel();
+    thread::spawn(move || {
+        let val = String::from("привет");
+        tx.send(val).unwrap();
+        println!("отправили {}", val);
+    });
+    let received = rx.recv().unwrap();
+    println!("Получили: {}", received);
+}
+#+END_SRC
+
+** Ошибка
+
+#+BEGIN_SRC text
+error[E0382]: use of moved value: `val`
+  --> src/main.rs:10:31
+9  |         tx.send(val).unwrap();
+   |                 --- value moved here
+10 |         println!("отправили {}", val);
+   |                                  ^^^
+   |           value used here after move
+   = note: move occurs because `val` has type
+   `std::string::String`, which does
+   not implement the `Copy` trait
+#+END_SRC
+
+* Отправляем несколько сообщений
+
+** Смотрим, что получатель ждёт
+
+#+BEGIN_SRC rust
+  fn main() {
+      let (tx, rx) = mpsc::channel();
+      thread::spawn(move || {
+          let vals = vec![String::from("привет"),
+            String::from("из"), String::from("потока")];
+          for val in vals {
+              tx.send(val).unwrap();
+              thread::sleep(Duration::from_secs(1));
+          }
+      });
+      for received in rx {
+          println!("Получили: {}", received);
+      }
+  }
+#+END_SRC
+
+** Вывод
+
+#+BEGIN_SRC text
+Получили: привет
+Получили: из
+Получили: потока
+#+END_SRC
+
+* Создание нескольких источников
+
+** Копируем передающую часть канала (1)
+
+#+BEGIN_SRC rust
+  let (tx, rx) = mpsc::channel();
+  let tx1 = tx.clone();
+  thread::spawn(move || {
+      let vals = vec![
+          String::from("привет"),
+          String::from("из"),
+          String::from("потока"),
+      ];
+      for val in vals {
+          tx1.send(val).unwrap();
+          thread::sleep(Duration::from_secs(1));
+      }
+  });
+#+END_SRC
+
+** Копируем передающую часть канала (2)
+
+#+BEGIN_SRC rust
+  thread::spawn(move || {
+      let vals = vec![
+          String::from("вам"),
+          String::from("ещё"),
+          String::from("сообщения"),
+      ];
+      for val in vals {
+          tx.send(val).unwrap();
+          thread::sleep(Duration::from_secs(1));
+      }
+  });
+
+#+END_SRC
+
+** Вывод
+
+#+BEGIN_SRC text
+Получили: привет
+Получили: вам
+Получили: из
+Получили: ещё
+Получили: потока
+Получили: сообщения
+#+END_SRC
+
+* Домашнее задание
+* Спасибо
