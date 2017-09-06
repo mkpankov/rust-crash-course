@@ -360,5 +360,200 @@ error[E0382]: use of moved value: `val`
 Получили: сообщения
 #+END_SRC
 
+* Многопоточность с общим состоянием
+
+* Мьютексы
+
+** API
+
+#+BEGIN_SRC rust
+use std::sync::Mutex;
+
+fn main() {
+    let m = Mutex::new(5);
+
+    {
+        let mut num = m.lock().unwrap();
+        *num = 6;
+    }
+
+    println!("m = {:?}", m);
+}
+#+END_SRC
+
+** Общее пользование мьютексом
+
+#+BEGIN_SRC rust
+fn main() {
+    let counter = Mutex::new(0);
+    let mut handles = vec![];
+    for _ in 0..10 {
+        let handle = thread::spawn(|| {
+            let mut num = counter.lock().unwrap();
+            *num += 1;
+        });
+        handles.push(handle);
+    }
+    for handle in handles { handle.join().unwrap(); }
+    }
+    println!("Result: {}", *counter.lock().unwrap());
+}
+#+END_SRC
+
+** Не компилируется!
+
+#+BEGIN_SRC text
+error[E0373]: closure may outlive the current
+function, but it borrows `counter`, which is
+owned by the current function -->
+9  |         let handle = thread::spawn(|| {
+   may outlive borrowed value `counter` ^^
+10 |             let mut num = counter.lock().unwrap();
+   |`counter` is borrowed here -------
+help: to force the closure to take ownership
+of `counter` (and any other referenced variables),
+use the `move` keyword, as shown:
+   |         let handle = thread::spawn(move || {
+#+END_SRC
+
+** I like to move it
+
+#+BEGIN_SRC rust
+thread::spawn(move || {
+#+END_SRC
+
+** Опять не компилируется! (1)
+
+#+BEGIN_SRC text
+error[E0382]: capture of moved value: `counter` -->
+9  |         let handle = thread::spawn(move || {
+   |    value moved (into closure) here -------
+10 |             let mut num = counter.lock().unwrap();
+value captured here after move ^^^^^^^
+   = note: move occurs because `counter` has type
+  `std::sync::Mutex<i32>`,
+   which does not implement the `Copy` trait
+#+END_SRC
+
+** Опять не компилируется (2)
+
+#+BEGIN_SRC text
+error[E0382]: use of moved value: `counter` -->
+9  |         let handle = thread::spawn(move || {
+   | value moved (into closure) here    -------
+...
+21 |     println!("Result: {}", *counter.lock().unwrap());
+   | value used here after move  ^^^^^^^
+   = note: move occurs because `counter` has
+   type `std::sync::Mutex<i32>`,
+   which does not implement the `Copy` trait
+
+error: aborting due to 2 previous errors
+#+END_SRC
+
+** Упростим до 2 потоков
+
+#+BEGIN_SRC rust
+let handle = thread::spawn(move || {
+    let mut num = counter.lock().unwrap();
+    *num += 1;
+});
+handles.push(handle);
+let handle2 = thread::spawn(move || {
+    let mut num2 = counter.lock().unwrap();
+    *num2 += 1;
+});
+handles.push(handle2);
+#+END_SRC
+
+** То же самое
+
+** Множественное владение с многими потоками
+
+#+BEGIN_SRC rust
+    let counter = Rc::new(Mutex::new(0));
+    let mut handles = vec![];
+    for _ in 0..10 {
+        let counter = counter.clone();
+        let handle = thread::spawn(move || {
+            let mut num = counter.lock().unwrap();
+            *num += 1;
+        });
+        handles.push(handle);
+    }
+    for handle in handles { handle.join().unwrap(); }
+    }
+    println!("Result: {}", *counter.lock().unwrap());
+#+END_SRC
+
+** Эпизод 3: Новая ошибка
+
+#+BEGIN_SRC text
+error[E0277]: the trait bound
+`std::rc::Rc<std::sync::Mutex<i32>>:
+std::marker::Send` is not satisfied -->
+11 |         let handle = thread::spawn(move || {
+   |                      ^^^^^^^^^^^^^
+   | the trait `std::marker::Send` is not
+   implemented for `std::rc::Rc<std::sync::Mutex<i32>>`
+   = note: `std::rc::Rc<std::sync::Mutex<i32>>`
+   cannot be sent between threads safely
+   = note: required because it appears within the type
+   `[closure@src/main.rs:11:36: 15:10
+   counter:std::rc::Rc<std::sync::Mutex<i32>>]`
+   = note: required by `std::thread::spawn`
+#+END_SRC
+
+** Атомарный подсчёт ссылок с Arc<T>
+
+#+BEGIN_SRC rust
+    let counter = Arc::new(Mutex::new(0));
+    let mut handles = vec![];
+    for _ in 0..10 {
+        let counter = counter.clone();
+        let handle = thread::spawn(move || {
+            let mut num = counter.lock().unwrap();
+            *num += 1;
+        });
+        handles.push(handle);
+    }
+    for handle in handles { handle.join().unwrap(); }
+    println!("Result: {}", *counter.lock().unwrap());
+#+END_SRC
+
+** Rust не предотвращает deadlock
+
+Так же как и циклы ссылок
+
+* Расширяемая многопоточность с помощью Send и Sync
+
+** Send
+
+- Владение значением типа можно передать в другой поток
+- =Rc<T>: !Send=
+- Любой тип, который состоит из значений типов =T: Send=, сам является =Send=
+- Примитивные типы - =Send=
+
+** Sync
+
+- Безопасно ли иметь в многих потоках =&T=
+- =Rc<T>: !Sync=, =RefCell<T>: !Sync=
+- Любой тип, который состоит из значений типов =T: Sync=, сам является =Sync=
+- Примитивные типы - =Sync=
+
+** Реализовывать Send и Sync руками небезопасно
+
+- Нужно когда делаешь свои структуры данных
+
 * Домашнее задание
+
+** Домашнее задание
+
+- Сделать общий словарь =HashMap<u32, String>=, где номеру потока соответствует
+  своё приветствие, которое он выводит на экран. Запустить 10 потоков.
+- Как предыдущее, но потоки дописывают к строке свой номер.
+- Взять большой текст с пробелами с множественными вхождениями определенного
+  слова. Сделать так, чтобы 2 потока искали там заданное слово одновременно, а
+  третий поток выводил результаты (расположение совпадения).
+
 * Спасибо
