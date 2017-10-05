@@ -1,0 +1,619 @@
+#+TITLE: Rust №16. Rust --- объектно-ориентированный?
+#+AUTHOR: Панков Михаил
+#+DATE: Февраль 2017
+#+EMAIL: work@michaelpankov.com
+#+LANGUAGE: ru
+#+CATEGORY: task
+#+OPTIONS:   H:2 num:t toc:nil \n:nil @:t ::t |:t ^:t -:t f:t *:t <:t
+#+OPTIONS:   TeX:t LaTeX:t skip:nil d:nil todo:t pri:nil tags:not-in-toc
+#+INFOJS_OPT: view:nil toc:nil ltoc:t mouse:underline buttons:0 path:http://orgmode.org/org-info.js
+#+EXPORT_SELECT_TAGS: export
+#+EXPORT_EXCLUDE_TAGS: noexport
+#+LINK_UP:
+#+LINK_HOME:
+#+startup: beamer
+#+LaTeX_CLASS: beamer
+# +LaTeX_CLASS_OPTIONS: [notes]
+#+COLUMNS: %40ITEM %10BEAMER_env(Env) %9BEAMER_envargs(Env Args) %4BEAMER_col(Col) %10BEAMER_extra(Extra)
+#+latex_header: \usepackage[english,russian]{babel}
+#+latex_header: \mode<beamer>{\usetheme{metropolis}}
+
+* Что такое ООП
+
+** Что такое ООП
+
+- Объекты содержат данные и поведение
+
+- Инкапсуляция скрывает детали реализации
+
+** Инкапсуляция (1)
+
+#+BEGIN_SRC rust
+pub struct AveragedCollection {
+    list: Vec<i32>,
+    average: f64,
+}
+#+END_SRC
+
+** Инкапсуляция (2)
+
+#+BEGIN_SRC rust
+impl AveragedCollection {
+    pub fn add(&mut self, value: i32) {
+        self.list.push(value);
+        self.update_average();
+    }
+    pub fn remove(&mut self) -> Option<i32> {
+        let result = self.list.pop();
+        match result {
+            Some(value) => {
+                self.update_average();
+                Some(value)
+            },
+            None => None,
+        }
+    }
+#+END_SRC
+
+** Инкапсуляция (3)
+
+#+BEGIN_SRC rust
+    pub fn average(&self) -> f64 {
+        self.average
+    }
+
+    fn update_average(&mut self) {
+        let total: i32 = self.list.iter().sum();
+        self.average = total as f64 / self.list.len() as f64;
+    }
+}
+
+#+END_SRC
+
+** Что такое ООП
+
+- Объекты содержат данные и поведение
+
+- Инкапсуляция скрывает детали реализации
+
+- Наследование в качестве системы типов и для разделения кода
+
+* Наследование
+
+** Для переиспользования кода
+
+- Реализация метода по умолчанию в типаже
+
+  #+BEGIN_SRC rust
+    trait Draw {
+        fn draw(&self) -> Result<(), ()> {
+            // draw me
+        }
+    }
+  #+END_SRC
+
+- Одноуровневое "наследование"
+
+** Для реализации системы типов
+
+- /Полиморфизм/
+  - Полиморфизм подтипов
+  - Параметрический полиморфизм
+- В Rust есть оба
+  - Обобщённая функция с ограничением на типаж
+    #+BEGIN_SRC rust
+      fn render<T: Draw>(figure: &T) { ... }
+    #+END_SRC
+  - Типажи-объекты
+    См. далее
+
+* Типажи-объекты для использования значений разных типов
+
+** Пример
+
+- Создадим библиотеку для UI
+  - Button
+  - TextField
+  - другое
+
+** Определяем типаж с общим поведением
+
+#+BEGIN_SRC rust
+pub trait Draw {
+    fn draw(&self);
+}
+pub struct Screen {
+    pub components: Vec<Box<Draw>>,
+}
+impl Screen {
+    pub fn run(&self) {
+        for component in self.components.iter() {
+            component.draw();
+        }
+    }
+}
+#+END_SRC
+
+** Альтернатива
+
+#+BEGIN_SRC rust
+pub struct Screen<T: Draw> {
+    pub components: Vec<T>,
+}
+
+impl<T> Screen<T>
+    where T: Draw {
+    pub fn run(&self) {
+        for component in self.components.iter() {
+            component.draw();
+        }
+    }
+}
+#+END_SRC
+
+* Реализация типажа нами и нашими пользователями
+
+** В библиотеке
+
+#+BEGIN_SRC rust
+pub struct Button {
+    pub width: u32,
+    pub height: u32,
+    pub label: String,
+}
+
+impl Draw for Button {
+    fn draw(&self) {
+        // код
+    }
+}
+#+END_SRC
+
+** У пользователя
+
+#+BEGIN_SRC rust
+extern crate rust_gui;
+use rust_gui::Draw;
+
+struct SelectBox {
+    width: u32,
+    height: u32,
+    options: Vec<String>,
+}
+
+impl Draw for SelectBox {
+    fn draw(&self) {
+        // код
+    }
+}
+#+END_SRC
+
+** Запуск (1)
+
+#+BEGIN_SRC rust
+use rust_gui::{Screen, Button};
+
+fn main() {
+    let screen = Screen {
+        components: vec![
+            Box::new(SelectBox {
+                width: 75,
+                height: 10,
+                options: vec![
+                    String::from("Yes"),
+                    String::from("Maybe"),
+                    String::from("No")
+                ],
+            }),
+#+END_SRC
+
+** Запуск (2)
+
+#+BEGIN_SRC rust
+            Box::new(Button {
+                width: 50,
+                height: 10,
+                label: String::from("OK"),
+            }),
+        ],
+    };
+
+    screen.run();
+}
+#+END_SRC
+
+** Если типаж не реализован
+
+#+BEGIN_SRC rust
+extern crate rust_gui;
+use rust_gui::Draw;
+
+fn main() {
+    let screen = Screen {
+        components: vec![
+            Box::new(String::from("Hi")),
+        ],
+    };
+
+    screen.run();
+}
+#+END_SRC
+
+** Ошибка
+
+#+BEGIN_SRC text
+error[E0277]: the trait bound
+`std::string::String: Draw` is not satisfied
+ 4 |             Box::new(String::from("Hi")),
+   |             ^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+   |             the trait `Draw` is not
+                 implemented for `std::string::String`
+   = note: required for the cast to the object
+     type `Draw`
+#+END_SRC
+
+* Типажи-объекты делают динамическую диспетчеризацию
+
+* Объектобезопасность
+
+** Если мы хотим типаж-объект...
+
+- типаж должен быть объектобезопасным
+  - Типаж не требует =Self: Sized=
+  - Все методы объектобезопасны
+
+** Зачем Self: Sized
+
+- Типаж-объект не является Sized
+
+- Если типаж требует Sized, из него нельзя сделать типаж-объект
+
+** Метод объектобезопасен если
+
+- Требует =Self: Sized= или
+
+- Всё нижеперечисленное:
+
+  - У метода нет обобщённых типов-параметров
+
+  - Его первым аргументом должно быть =self=, =&self= или =&mut self=
+
+  - Он не должен использовать =Self= в других местах своей сигнатуры
+
+** Необъектобезопасный пример
+
+#+BEGIN_SRC rust
+pub trait Clone {
+    fn clone(&self) -> Self;
+}
+
+pub struct Screen {
+    pub components: Vec<Box<Clone>>,
+}
+#+END_SRC
+
+** Ошибка
+
+#+BEGIN_SRC text
+error[E0038]: the trait `std::clone::Clone`
+cannot be made into an object
+2 |     pub components: Vec<Box<Clone>>,
+  |     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  | the trait `std::clone::Clone` cannot be
+    made into an object
+  = note: the trait cannot require that
+   `Self : Sized`
+#+END_SRC
+
+* Пример объектно-ориентированного дизайна
+
+** Код
+
+#+BEGIN_SRC rust
+  extern crate blog;
+  use blog::Post;
+
+  fn main() {
+      let mut post = Post::new();
+      post.add_text("I ate a salad for lunch today");
+      assert_eq!("", post.content());
+      post.request_review();
+      assert_eq!("", post.content());
+      post.approve();
+      assert_eq!("I ate a salad for lunch today",
+                 post.content());
+  }
+#+END_SRC
+
+* Определяем Post
+
+** Код (1)
+
+#+BEGIN_SRC rust
+pub struct Post {
+    state: Option<Box<State>>,
+    content: String,
+}
+
+impl Post {
+    pub fn new() -> Post {
+        Post {
+            state: Some(Box::new(Draft {})),
+            content: String::new(),
+        }
+    }
+}
+#+END_SRC
+
+** Код (2)
+
+#+BEGIN_SRC rust
+trait State {}
+
+struct Draft {}
+
+impl State for Draft {}
+#+END_SRC
+
+* Сохраняем содержимое Post
+
+** Код
+
+#+BEGIN_SRC rust
+impl Post {
+    // ...snip...
+    pub fn add_text(&mut self, text: &str) {
+        self.content.push_str(text);
+    }
+}
+#+END_SRC
+
+* Содержимое черновика - пустое
+
+** Код
+
+#+BEGIN_SRC rust
+impl Post {
+    // ...snip...
+    pub fn content(&self) -> &str {
+        ""
+    }
+}
+#+END_SRC
+
+* Запрашиваем редактирование статьи
+
+** Код (1)
+
+#+BEGIN_SRC rust
+  impl Post {
+      // ...snip...
+      pub fn request_review(&mut self) {
+          if let Some(s) = self.state.take() {
+              self.state = Some(s.request_review())
+          }
+      }
+  }
+
+  trait State {
+      fn request_review(self: Box<Self>)
+                        -> Box<State>;
+  }
+#+END_SRC
+
+** Код (2)
+
+#+BEGIN_SRC rust
+  struct Draft {}
+  impl State for Draft {
+      fn request_review(self: Box<Self>)
+                        -> Box<State> {
+          Box::new(PendingReview {})
+      }
+  }
+  struct PendingReview {}
+  impl State for PendingReview {
+      fn request_review(self: Box<Self>)
+                        -> Box<State> {
+          self
+      }
+  }
+#+END_SRC
+
+* Завершение редактирования изменяет содержимое
+
+** Код (1)
+
+#+BEGIN_SRC rust
+impl Post {
+    // ...snip...
+    pub fn approve(&mut self) {
+        if let Some(s) = self.state.take() {
+            self.state = Some(s.approve())
+        }
+    }
+}
+
+trait State {
+    fn request_review(self: Box<Self>) -> Box<State>;
+    fn approve(self: Box<Self>) -> Box<State>;
+}
+#+END_SRC
+
+** Код (2)
+
+#+BEGIN_SRC rust
+struct Draft {}
+
+impl State for Draft {
+    // ...snip...
+    fn approve(self: Box<Self>) -> Box<State> {
+        self
+    }
+}
+#+END_SRC
+
+** Код (3)
+
+#+BEGIN_SRC rust
+struct PendingReview {}
+
+impl State for PendingReview {
+    // ...snip...
+    fn approve(self: Box<Self>) -> Box<State> {
+        Box::new(Published {})
+    }
+}
+#+END_SRC
+
+** Код (4)
+
+#+BEGIN_SRC rust
+struct Published {}
+
+impl State for Published {
+    fn request_review(self: Box<Self>) -> Box<State> {
+        self
+    }
+
+    fn approve(self: Box<Self>) -> Box<State> {
+        self
+    }
+}
+#+END_SRC
+
+** Код (5)
+
+#+BEGIN_SRC rust
+impl Post {
+    // ...snip...
+    pub fn content(&self) -> &str {
+        self.state.as_ref().unwrap().content(&self)
+    }
+    // ...snip...
+}
+#+END_SRC
+
+** Код (6)
+
+#+BEGIN_SRC rust
+trait State {
+    // ...snip...
+    fn content<'a>(&self, post: &'a Post) -> &'a str {
+        ""
+    }
+}
+// ...snip...
+struct Published {}
+impl State for Published {
+    // ...snip...
+    fn content<'a>(&self, post: &'a Post) -> &'a str {
+        &post.content
+    }
+}
+#+END_SRC
+
+* Компромиссы дизайна
+
+** Компромиссы дизайна
+
+- Реализация переходов в состояниях
+
+- Повторяющийся код
+
+* Кодируем состояния и поведение в типах
+
+** Код (1)
+
+#+BEGIN_SRC rust
+pub struct Post {
+    content: String,
+}
+
+impl Post {
+    pub fn new() -> DraftPost {
+        DraftPost {
+            content: String::new(),
+        }
+    }
+
+    pub fn content(&self) -> &str {
+       &self.content
+    }
+}
+#+END_SRC
+
+** Код (2)
+
+#+BEGIN_SRC rust
+pub struct DraftPost {
+    content: String,
+}
+
+impl DraftPost {
+    pub fn add_text(&mut self, text: &str) {
+        self.content.push_str(text);
+    }
+}
+
+#+END_SRC
+
+* Реализуем переходы как преобразования типов
+
+** Код (1)
+
+#+BEGIN_SRC rust
+impl DraftPost {
+    // ...snip...
+
+    pub fn request_review(self) -> PendingReviewPost {
+        PendingReviewPost {
+            content: self.content,
+        }
+    }
+}
+#+END_SRC
+
+** Код (2)
+
+#+BEGIN_SRC rust
+pub struct PendingReviewPost {
+    content: String,
+}
+
+impl PendingReviewPost {
+    pub fn approve(self) -> Post {
+        Post {
+            content: self.content,
+        }
+    }
+}
+#+END_SRC
+
+** Код (3)
+
+#+BEGIN_SRC rust
+  extern crate blog;
+  use blog::Post;
+
+  fn main() {
+      let mut post = Post::new();
+      post.add_text("I ate a salad for lunch today");
+      let post = post.request_review();
+      let post = post.approve();
+      assert_eq!("I ate a salad for lunch today",
+                 post.content());
+  }
+#+END_SRC
+
+* Домашнее задание
+
+** Домашнее задание
+
+- Разрешить добавление текста только в черновик
+
+- Добавить метод =reject()=
+
+- Требовать 2 вызова =approve()= для публикации
+
+* Спасибо
